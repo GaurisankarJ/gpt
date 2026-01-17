@@ -57,9 +57,9 @@ class Head(nn.Module):
     def __init__(self, head_size):
         super().__init__()
 
-        self.key = nn.Linear(n_embed, head_size, dtype=torch.float)
-        self.query = nn.Linear(n_embed, head_size, dtype=torch.float)
-        self.value = nn.Linear(n_embed, head_size, dtype=torch.float)
+        self.key = nn.Linear(n_embed, head_size, dtype=torch.float, bias=False)
+        self.query = nn.Linear(n_embed, head_size, dtype=torch.float, bias=False)
+        self.value = nn.Linear(n_embed, head_size, dtype=torch.float, bias=False)
         self.register_buffer(
             "tril", torch.tril(torch.ones((block_size, block_size), dtype=torch.float))
         )
@@ -69,8 +69,8 @@ class Head(nn.Module):
         _, T, _ = x.shape
 
         k = self.key(x)
-        q = self.key(x)
-        v = self.key(x)
+        q = self.query(x)
+        v = self.value(x)
 
         wei = k @ q.transpose(-2, -1) * k.shape[-1] ** -0.5
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
