@@ -82,7 +82,7 @@ class Head(nn.Module):
         return out
 
 
-class MultiHeadAttention(nn.Module):
+class MultiHeadAttentionV0(nn.Module):
     def __init__(self, head_size, num_heads):
         super().__init__()
 
@@ -96,6 +96,46 @@ class MultiHeadAttention(nn.Module):
         out = torch.cat([H(x) for H in self.heads], axis=-1)
         out = self.proj(x)
         out = self.dropout(x)
+
+        return out
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, n_embed, num_heads):
+        super().__init__()
+
+        assert n_embed % num_heads == 0, (
+            "Embedding dimension must be divisible by number of heads."
+        )
+
+        self.num_heads = num_heads
+        self.h_embed = n_embed // num_heads
+
+        self.key = nn.Linear(n_embed, n_embed, bias=False)
+        self.query = nn.Linear(n_embed, n_embed, bias=False)
+        self.value = nn.Linear(n_embed, n_embed, bias=False)
+        self.projection = nn.Linear(n_embed, n_embed, bias=False)
+        self.dropout = nn.Dropout(per_dropout)
+        self.register_buffer("tril", torch.tril(torch.ones((block_size, block_size))))
+
+    def forward(self, x):
+        B, T, C = x.shape
+
+        k = self.key(x)
+        q = self.query(x)
+        v = self.value(x)
+
+        k = k.view(B, T, self.num_heads, self.h_embed).transpose(1, 2)
+        q = q.view(B, T, self.num_heads, self.h_embed).transpose(1, 2)
+        v = v.view(B, T, self.num_heads, self.h_embed).transpose(1, 2)
+
+        attn_scores = q @ k.transpose(-2, -1)
+        attn_scores.masked_fill_(self.tril[:T, :T] == 0, -torch.inf)
+        attn_weights = torch.softmax(attn_scores * k.shape[-1] ** -0.5, dim=-1)
+
+        out = (attn_weights @ v).transpose(1, 2)
+        out = out.contiguous().view(B, T, C)
+        out = self.dropout(self.projection(out))
 
         return out
 
@@ -119,9 +159,7 @@ class Block(nn.Module):
     def __init__(self, n_embed, num_heads):
         super().__init__()
 
-        head_size = n_embed // num_heads
-
-        self.sa = MultiHeadAttention(head_size=head_size, num_heads=num_heads)
+        self.sa = MultiHeadAttention(n_embed=n_embed, num_heads=num_heads)
         self.ffwd = FeedForward(n_embed=n_embed)
         self.ln1 = nn.LayerNorm(n_embed)
         self.ln2 = nn.LayerNorm(n_embed)
