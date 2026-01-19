@@ -176,7 +176,7 @@ class GPT(nn.Module):
         super().__init__()
 
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-        self.pos_embedding_table = nn.Embedding(vocab_size, n_embed)
+        self.pos_embedding_table = nn.Embedding(block_size, n_embed)
         self.blocks = nn.Sequential(
             *[Block(n_embed=n_embed, num_heads=n_head) for _ in range(n_layers)]
         )
@@ -263,7 +263,9 @@ if __name__ == "__main__":
 
     model.eval()
     text_input = torch.tensor(
-        encode("Hello"), dtype=torch.long, device=device
+        encode("Hello!"), dtype=torch.long, device=device
     ).unsqueeze(0)
+
     output = model.generate(text_input, max_token_length=200).to("cpu")[0]
+
     print(decode(output.tolist()))
