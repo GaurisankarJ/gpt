@@ -2,3 +2,5 @@ gpt/
 __pycache__/
 checkpoints/
 char_gpt/
+logs/
+.ipynb_checkpoints/

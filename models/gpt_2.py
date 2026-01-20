@@ -15,7 +15,10 @@ GPT2_CONFIG_124M = {
 
 
 class GPT_2_Model(nn.Module):
-    def __init__(self, config):
+    def __init__(
+        self,
+        config,
+    ):
         super().__init__()
 
         vocab_size = config["vocab_size"]
@@ -44,7 +47,10 @@ class GPT_2_Model(nn.Module):
         self.norm_final = LayerNorm(dim_embedding)
         self.out_head = nn.Linear(dim_embedding, vocab_size, bias=False)
 
-    def forward(self, in_idx):
+    def forward(
+        self,
+        in_idx,
+    ):
         _, seq_len = in_idx.shape
 
         token_embeddings = self.token_embedding(in_idx)

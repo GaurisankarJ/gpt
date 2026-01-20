@@ -22,7 +22,10 @@ class CausalAttentionHead(nn.Module):
         )
         self.drop_attention = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+    ):
         _, T, _ = x.shape
 
         keys = self.weights_key(x)
@@ -42,7 +45,14 @@ class CausalAttentionHead(nn.Module):
 
 
 class MultiHeadAttentionNaive(nn.Module):
-    def __init__(self, dim_embedding, num_head, context_length, dropout, qkv_bias):
+    def __init__(
+        self,
+        dim_embedding,
+        num_head,
+        context_length,
+        dropout,
+        qkv_bias,
+    ):
         super().__init__()
 
         self.heads = nn.ModuleList(
@@ -60,7 +70,10 @@ class MultiHeadAttentionNaive(nn.Module):
         self.project = nn.Linear(dim_embedding, dim_embedding)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+    ):
         out = [head(x) for head in self.heads]
         out = torch.cat(out, dim=-1)
         out = self.dropout(self.project(out))

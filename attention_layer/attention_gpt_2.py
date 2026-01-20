@@ -3,7 +3,14 @@ import torch.nn as nn
 
 
 class MultiHeadAttention_GPT_2(nn.Module):
-    def __init__(self, dim_embedding, num_head, context_length, dropout, qkv_bias):
+    def __init__(
+        self,
+        dim_embedding,
+        num_head,
+        context_length,
+        dropout,
+        qkv_bias,
+    ):
         super().__init__()
 
         assert dim_embedding % num_head == 0, (
@@ -22,7 +29,10 @@ class MultiHeadAttention_GPT_2(nn.Module):
         self.project = nn.Linear(dim_embedding, dim_embedding)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+    ):
         batch, time, channel = x.shape
 
         keys = self.weights_key(x)

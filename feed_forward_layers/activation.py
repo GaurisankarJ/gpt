@@ -8,7 +8,10 @@ class GELU(nn.Module):
     ):
         super().__init__()
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+    ):
         return (
             0.5
             * x

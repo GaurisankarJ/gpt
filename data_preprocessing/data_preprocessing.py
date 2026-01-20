@@ -1,49 +1,74 @@
-import tiktoken
+from typing import Any, Optional, Set
+
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-# GPT2
-tokenizer = tiktoken.get_encoding("gpt2")
 
+class BasicDataLoader:
+    def __init__(
+        self,
+        tokenizer: Any,
+        batch_size: int = 4,
+        context_length: int = 256,
+        stride: int = 256,
+        allowed_special: Optional[Set[str]] = {"<|endoftext|>"},
+        shuffle: Optional[bool] = True,
+        drop_last: Optional[bool] = True,
+        num_workers: Optional[int] = 0,
+    ) -> None:
+        self.tokenizer = tokenizer
+        self.batch_size = batch_size
+        self.context_length = context_length
+        self.stride = stride
+        self.allowed_special = allowed_special
+        self.shuffle = shuffle
+        self.drop_last = drop_last
+        self.num_workers = num_workers
 
-class GPTDatasetV1(Dataset):
-    def __init__(self, text, tokenizer, context_length, stride):
-        self.input_ids = []
-        self.target_ids = []
+    class GPTDataset(Dataset):
+        def __init__(
+            self,
+            text: str,
+            tokenizer: Any,
+            context_length: int,
+            stride: int,
+            allowed_special: Optional[Set[str]] = {"<|endoftext|>"},
+        ):
+            self.input_ids = []
+            self.target_ids = []
 
-        token_ids = tokenizer.encode(text)
-        for i in range(0, len(token_ids) - context_length, stride):
-            input_chunk = token_ids[i : i + context_length]
-            target_chunk = token_ids[i + 1 : i + context_length + 1]
-            self.input_ids.append(torch.tensor(input_chunk))
-            self.target_ids.append(torch.tensor(target_chunk))
+            token_ids = tokenizer.encode(text, allowed_special=allowed_special)
 
-    def __len__(self):
-        return len(self.input_ids)
+            for i in range(0, len(token_ids) - context_length, stride):
+                input_chunk = token_ids[i : i + context_length]
+                target_chunk = token_ids[i + 1 : i + context_length + 1]
 
-    def __getitem__(self, idx):
-        return self.input_ids[idx], self.target_ids[idx]
+                self.input_ids.append(torch.tensor(input_chunk))
+                self.target_ids.append(torch.tensor(target_chunk))
 
+        def __len__(self):
+            return len(self.input_ids)
 
-def create_dataloader_v1(
-    text,
-    batch_size=4,
-    context_length=256,
-    stride=64,
-    shuffle=True,
-    drop_last=True,
-    num_workers=0,
-):
-    tokenizer = tiktoken.get_encoding("gpt2")
-    dataset = GPTDatasetV1(
-        text=text, tokenizer=tokenizer, context_length=context_length, stride=stride
-    )
-    dataloader = DataLoader(
-        dataset=dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=drop_last,
-        num_workers=num_workers,
-    )
+        def __getitem__(self, idx: int):
+            return self.input_ids[idx], self.target_ids[idx]
 
-    return dataloader
+    def create_dataloader(
+        self,
+        text: str,
+    ):
+        dataset = self.GPTDataset(
+            text=text,
+            tokenizer=self.tokenizer,
+            context_length=self.context_length,
+            stride=self.stride,
+        )
+
+        dataloader = DataLoader[Any](
+            dataset=dataset,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            drop_last=self.drop_last,
+            num_workers=self.num_workers,
+        )
+
+        return dataloader

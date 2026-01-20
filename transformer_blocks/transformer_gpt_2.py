@@ -5,7 +5,14 @@ from utils import LayerNorm
 
 
 class TransformerBlock_GPT_2(nn.Module):
-    def __init__(self, dim_embedding, num_heads, context_length, dropout, qkv_bias):
+    def __init__(
+        self,
+        dim_embedding,
+        num_heads,
+        context_length,
+        dropout,
+        qkv_bias,
+    ):
         super().__init__()
 
         self.multi_head_attention = MultiHeadAttention_GPT_2(
@@ -22,7 +29,10 @@ class TransformerBlock_GPT_2(nn.Module):
         self.norm_two = LayerNorm(dim_embedding)
         self.drop_residual = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+    ):
         x = x + self.drop_residual(self.multi_head_attention(self.norm_one(x)))
         x = x + self.drop_residual(self.feed_forward(self.norm_two(x)))
 
