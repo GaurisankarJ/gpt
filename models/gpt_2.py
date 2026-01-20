@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from transformer import TransformerBlock
+from transformer_blocks import TransformerBlock_GPT_2
+from utils import LayerNorm
 
 GPT2_CONFIG_124M = {
     "vocab_size": 50257,  # Vocabulary size
@@ -13,7 +14,7 @@ GPT2_CONFIG_124M = {
 }
 
 
-class GPT2(nn.Module):
+class GPT_2_Model(nn.Module):
     def __init__(self, config):
         super().__init__()
 
@@ -30,7 +31,7 @@ class GPT2(nn.Module):
         self.drop_embedding = nn.Dropout(drop_rate)
         self.transformer_blocks = nn.Sequential(
             *[
-                TransformerBlock(
+                TransformerBlock_GPT_2(
                     dim_embedding=dim_embedding,
                     num_heads=num_heads,
                     context_length=context_length,
@@ -40,7 +41,7 @@ class GPT2(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        self.norm_final = nn.LayerNorm(dim_embedding)
+        self.norm_final = LayerNorm(dim_embedding)
         self.out_head = nn.Linear(dim_embedding, vocab_size, bias=False)
 
     def forward(self, in_idx):

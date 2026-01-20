@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 
 
-# Naive Feed Forward Layer
 class GELU(nn.Module):
     def __init__(
         self,
@@ -21,17 +20,3 @@ class GELU(nn.Module):
                 )
             )
         )
-
-
-class FeedForwardV1(nn.Module):
-    def __init__(self, dim_embedding, dropout):
-        super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(dim_embedding, 4 * dim_embedding),
-            GELU(),
-            nn.Linear(4 * dim_embedding, dim_embedding),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x):
-        return self.layers(x)

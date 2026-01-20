@@ -1,2 +1,4 @@
-/gpt/
-/__pycache__/
+gpt/
+__pycache__/
+checkpoints/
+char_gpt/
