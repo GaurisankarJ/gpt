@@ -1,4 +1,5 @@
 import torch.nn as nn
+
 from attention_layer import MultiHeadAttention_GPT_2
 from feed_forward_layers import FeedForward_GPT_2
 from utils import LayerNorm
@@ -25,6 +26,7 @@ class TransformerBlock_GPT_2(nn.Module):
         self.feed_forward = FeedForward_GPT_2(
             dim_embedding=dim_embedding, dropout=dropout
         )
+        # nn.LayerNorm(dim_embedding)
         self.norm_one = LayerNorm(dim_embedding)
         self.norm_two = LayerNorm(dim_embedding)
         self.drop_residual = nn.Dropout(dropout)

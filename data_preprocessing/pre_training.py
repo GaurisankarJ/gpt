@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 
-class BasicDataLoader:
+class BasicDataLoaderPreTraining:
     def __init__(
         self,
         tokenizer: Any,
@@ -25,7 +25,7 @@ class BasicDataLoader:
         self.drop_last = drop_last
         self.num_workers = num_workers
 
-    class GPTDataset(Dataset):
+    class DatasetPreTraining(Dataset):
         def __init__(
             self,
             text: str,
@@ -56,11 +56,12 @@ class BasicDataLoader:
         self,
         text: str,
     ):
-        dataset = self.GPTDataset(
+        dataset = self.DatasetPreTraining(
             text=text,
             tokenizer=self.tokenizer,
             context_length=self.context_length,
             stride=self.stride,
+            allowed_special=self.allowed_special,
         )
 
         dataloader = DataLoader[Any](

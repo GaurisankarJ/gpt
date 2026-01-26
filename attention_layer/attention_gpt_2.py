@@ -53,6 +53,14 @@ class MultiHeadAttention_GPT_2(nn.Module):
         )
         attention_weights = self.dropout(attention_weights)
 
+        # context_vector = nn.functional.scaled_dot_product_attention(
+        #     queries,
+        #     keys,
+        #     values,
+        #     attn_mask=None,
+        #     dropout_p=self.dropout,
+        #     is_causal=True,
+        # )
         context_vector = (attention_weights @ values).transpose(1, 2)
         context_vector = context_vector.contiguous().view(batch, time, channel)
         context_vector = self.project(context_vector)

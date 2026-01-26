@@ -9,10 +9,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from evaluation import Evaluator
-from generate import Generator
 
 
-class BasicTrainer:
+class TrainerClassification:
     def __init__(
         self,
         model: nn.Module,
@@ -25,9 +24,11 @@ class BasicTrainer:
         self.model.to(self.device)
         self.train_losses = []
         self.val_losses = []
-        self.total_tokens_seen = []
+        self.train_accuracy = []
+        self.val_accuracy = []
+        self.examples_seen = 0
+        self.total_examples_seen = []
         self.epochs_eval = []
-        self.tokens_seen = 0
         self.global_steps = -1
         self.evaluator = Evaluator(
             model=model,
@@ -39,14 +40,17 @@ class BasicTrainer:
         epoch: int,
         train_loss: float,
         val_loss: float,
+        train_accuracy: float,
+        val_accuracy: float,
     ) -> None:
-        tokens_m = self.tokens_seen / 1e6
+        examples_t = self.examples_seen / 1e3
 
         print(
             f"Epoch {epoch + 1:02d} | "
             f"Step {self.global_steps:06d} | "
             f"Loss (T/V): {train_loss:.4f} / {val_loss:.4f} | "
-            f"Tokens: {tokens_m:.4f}M"
+            f"Accuracy (T/V): {train_accuracy:.4f} / {val_accuracy:.4f} | "
+            f"Examples: {examples_t:.4f}T"
         )
 
     def save_checkpoint(
@@ -58,9 +62,7 @@ class BasicTrainer:
 
         os.makedirs(folder, exist_ok=True)
 
-        file_name = (
-            f"checkpoint_{model_name}_ep{epoch + 1:02d}_step{self.global_steps:06d}.pth"
-        )
+        file_name = f"checkpoint_classification_fine_tuned_{model_name}_ep{epoch + 1:02d}_step{self.global_steps:06d}.pth"
         full_path = os.path.join(folder, file_name)
 
         torch.save(
@@ -85,13 +87,15 @@ class BasicTrainer:
 
         data = {
             "Epochs": self.epochs_eval,
-            "Tokens Seen": self.total_tokens_seen,
+            "Examples Seen": self.total_examples_seen,
             "Training Loss": self.train_losses,
             "Validation Loss": self.val_losses,
+            "Training Accuracy": self.train_accuracy,
+            "Validation Accuracy": self.val_accuracy,
         }
         metric_dataframe = pd.DataFrame(data)
 
-        file_name = f"{model_name}_{timestamp}.csv"
+        file_name = f"{model_name}_classification_fine_tuned_{timestamp}.csv"
         full_path = os.path.join(folder, file_name)
 
         metric_dataframe.to_csv(full_path, index=False)
@@ -108,7 +112,6 @@ class BasicTrainer:
         freq_checkpoint: Optional[int] = None,
         model_name: Optional[str] = "gpt",
         save_logs: Optional[bool] = False,
-        generator: Optional[Generator] = None,
     ) -> Tuple[float, float, int]:
         training_start_time = time.time()
         for epoch in range(num_epochs):
@@ -123,7 +126,7 @@ class BasicTrainer:
 
                 self.optimizer.zero_grad()
 
-                loss = self.evaluator.calculate_loss_batch(
+                loss = self.evaluator.calculate_loss_batch_classification(
                     input_batch=input_batch,
                     target_batch=target_batch,
                 )
@@ -133,22 +136,27 @@ class BasicTrainer:
 
                 self.optimizer.step()
 
-                self.tokens_seen += input_batch.numel()
+                self.examples_seen += input_batch.shape[0]
                 self.global_steps += 1
 
                 if (
                     self.global_steps % freq_evaluation == 0
                     or (self.global_steps + 1) % len(train_dataloader) == 0
                 ):
-                    train_loss, val_loss = self.evaluator.evaluate_model(
-                        train_dataloader=train_dataloader,
-                        val_dataloader=val_dataloader,
-                        iter_evaluation=iter_evaluation,
+                    train_loss, val_loss, train_accuracy, val_accuracy = (
+                        self.evaluator.evaluate_model(
+                            train_dataloader=train_dataloader,
+                            val_dataloader=val_dataloader,
+                            iter_evaluation=iter_evaluation,
+                            task="classification",
+                        )
                     )
 
                     self.train_losses.append(train_loss)
                     self.val_losses.append(val_loss)
-                    self.total_tokens_seen.append(self.tokens_seen)
+                    self.train_accuracy.append(train_accuracy)
+                    self.val_accuracy.append(val_accuracy)
+                    self.total_examples_seen.append(self.examples_seen)
 
                     epoch_steps = self.global_steps / len(train_dataloader)
                     self.epochs_eval.append(round(epoch_steps, 3))
@@ -157,19 +165,12 @@ class BasicTrainer:
                         epoch=epoch,
                         train_loss=train_loss,
                         val_loss=val_loss,
+                        train_accuracy=train_accuracy,
+                        val_accuracy=val_accuracy,
                     )
 
             if freq_checkpoint and (epoch + 1) % freq_checkpoint == 0:
                 self.save_checkpoint(model_name=model_name, epoch=epoch)
-
-            if generator:
-                output = generator.generate(
-                    idx=generator.text_to_token_ids("Hello World!").unsqueeze(0),
-                    max_token_length=50,
-                )
-                print(
-                    f"Sample Model Ouput: \n{generator.token_ids_to_text(output.squeeze(0))}"
-                )
 
             epoch_end_time = time.time()
             epoch_execution_time_minutes = (epoch_end_time - epoch_start_time) / 60
@@ -184,6 +185,8 @@ class BasicTrainer:
                 model_name=model_name,
             )
 
-        self.save_checkpoint(model_name=f"{model_name}_final", epoch=epoch)
+        self.save_checkpoint(
+            model_name=f"{model_name}_final_classification_fine_tuned", epoch=epoch
+        )
 
-        return self.train_losses, self.val_losses, self.total_tokens_seen
+        return self.train_losses, self.val_losses, self.total_examples_seen

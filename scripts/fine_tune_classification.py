@@ -1,3 +1,4 @@
+# python -m scripts.fine_tune_classification --test True
 import argparse
 
 import tiktoken

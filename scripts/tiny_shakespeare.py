@@ -1,5 +1,7 @@
+# python -m scripts.tiny_shakespeare
 import tiktoken
 import torch
+
 from data_preprocessing import BasicDataLoader, read_file
 from generate import Generator
 from models import GPT_2_Model
@@ -8,7 +10,7 @@ from utils import count_parameters, get_device
 
 HYPER_PARMETERS = {
     "batch_size": 4,
-    "learing_rate": 6.66e-5,
+    "learing_rate": 5e-5,
     "weight_decay": 0.3,
     "num_epochs": 10,
     "freq_evaluation": 100,
@@ -56,7 +58,7 @@ if __name__ == "__main__":
     val_dataloader = dataloader.create_dataloader(val_data)
 
     # Create optimizer
-    optimzer = torch.optim.AdamW(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=HYPER_PARMETERS["learing_rate"],
         weight_decay=HYPER_PARMETERS["weight_decay"],
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     # Create trainer
     trainer = BasicTrainer(
         model=model,
-        optimizer=optimzer,
+        optimizer=optimizer,
         device=device,
     )
 

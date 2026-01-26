@@ -1,6 +1,7 @@
 # python -m chat.cli_chat
 import tiktoken
 import torch
+
 from generate import Generator
 from models import GPT_2_Model
 from utils import count_parameters, get_device, text_to_token_ids
@@ -65,14 +66,13 @@ if __name__ == "__main__":
 
             print("GPT: ", end="", flush=True)
 
-            for token_id in generator.generate(
+            for token_id in generator.generate_stream(
                 idx=input_ids,
                 max_token_length=100,
                 temperature=0.7,
                 top_k=30,
-                stream=True,
             ):
-                word = tokenizer.decode([token_id.unsqueeze(0)])
+                word = tokenizer.decode([token_id.unsqueeze(0).item()])
                 print(word, end="", flush=True)
 
             print("\n")

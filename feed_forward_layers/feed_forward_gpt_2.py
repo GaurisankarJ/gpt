@@ -13,6 +13,7 @@ class FeedForward_GPT_2(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(dim_embedding, expansion_factor * dim_embedding),
+            # nn.GELU(approximate="tanh")
             GELU(),
             nn.Linear(expansion_factor * dim_embedding, dim_embedding),
             nn.Dropout(dropout),

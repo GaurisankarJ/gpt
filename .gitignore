@@ -4,3 +4,4 @@ checkpoints/
 char_gpt/
 logs/
 .ipynb_checkpoints/
+data/

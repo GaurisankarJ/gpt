@@ -1,4 +1,4 @@
-from typing import Any, Optional, Set
+from typing import Any, Iterator, Optional, Set
 
 import torch
 import torch.nn as nn
@@ -69,7 +69,6 @@ class Generator:
         max_token_length: int = 100,
         temperature: Optional[float] = None,
         top_k: Optional[int] = None,
-        stream: Optional[bool] = False,
     ) -> torch.Tensor:
         idx = idx.to(self.device)
         self.model.eval()
@@ -96,13 +95,48 @@ class Generator:
             else:
                 idx_next = torch.argmax(logits, dim=-1, keepdims=True)
 
-            if stream:
-                yield idx_next
-
             if self.eos_id is not None and idx_next.item() == self.eos_id:
                 break
 
             idx = torch.cat((idx, idx_next), dim=-1)
 
-        if not stream:
-            return idx
+        return idx
+
+    def generate_stream(
+        self,
+        idx: torch.Tensor,
+        max_token_length: int = 100,
+        temperature: Optional[float] = None,
+        top_k: Optional[int] = None,
+    ) -> Iterator[torch.Tensor]:
+        idx = idx.to(self.device)
+        self.model.eval()
+
+        for _ in range(max_token_length):
+            idx_cond = idx[:, -self.context_length :]
+
+            with torch.no_grad():
+                logits = self.model(idx_cond)
+
+            logits = logits[:, -1, :]
+
+            if top_k is not None:
+                logits = self.get_top_k(
+                    logits=logits,
+                    top_k=top_k,
+                )
+            if temperature and temperature > 0:
+                probs = self.get_probs_temperature(
+                    logits=logits,
+                    temperature=temperature,
+                )
+                idx_next = torch.multinomial(probs, num_samples=1)
+            else:
+                idx_next = torch.argmax(logits, dim=-1, keepdims=True)
+
+            yield idx_next
+
+            if self.eos_id is not None and idx_next.item() == self.eos_id:
+                break
+
+            idx = torch.cat((idx, idx_next), dim=-1)

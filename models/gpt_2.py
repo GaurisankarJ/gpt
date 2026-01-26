@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from transformer_blocks import TransformerBlock_GPT_2
 from utils import LayerNorm
 
@@ -44,6 +45,7 @@ class GPT_2_Model(nn.Module):
                 for _ in range(num_layers)
             ]
         )
+        # nn.LayerNorm(dim_embedding)
         self.norm_final = LayerNorm(dim_embedding)
         self.out_head = nn.Linear(dim_embedding, vocab_size, bias=False)
 
