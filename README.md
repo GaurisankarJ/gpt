@@ -148,16 +148,18 @@ sbatch run_gpu.sbatch train.py --lr 0.001 --epochs 10
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
 #SBATCH --time=12:00:00
-#SBATCH --chdir=$SLURM_SUBMIT_DIR
+#SBATCH --chdir=.
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
 set -euo pipefail
 
-# Ensure we're in the submit directory (extra safety)
-cd "$SLURM_SUBMIT_DIR"
+# Always execute from the directory where you ran sbatch
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
 
-mkdir -p logs
+# Use the existing logs folder in the project root
+LOGDIR="$PWD/logs"
+mkdir -p "$LOGDIR"
 
 if [ $# -lt 1 ]; then
   echo "Usage: sbatch run_gpu.sbatch script.py [args]"
@@ -170,7 +172,6 @@ shift
 module purge
 module load ALICE/default
 module load Miniconda3/24.7.1-0
-
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate gpt
 
@@ -189,7 +190,7 @@ nvidia-smi || true
 echo "Python version:"
 python --version
 
-python "$SCRIPT" "$@" 2>&1 | tee "logs/run-${SLURM_JOB_ID}.log"
+python "$SCRIPT" "$@" 2>&1 | tee "$LOGDIR/run-${SLURM_JOB_ID}.log"
 
 echo "Finished at $(date)"
 ```
