@@ -148,10 +148,14 @@ sbatch run_gpu.sbatch train.py --lr 0.001 --epochs 10
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
 #SBATCH --time=12:00:00
+#SBATCH --chdir=$SLURM_SUBMIT_DIR
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
 set -euo pipefail
+
+# Ensure we're in the submit directory (extra safety)
+cd "$SLURM_SUBMIT_DIR"
 
 mkdir -p logs
 
@@ -173,14 +177,19 @@ conda activate gpt
 echo "==============================="
 echo "Job ID: $SLURM_JOB_ID"
 echo "Node: $(hostname)"
+echo "Working Dir: $(pwd)"
 echo "Start Time: $(date)"
 echo "Script: $SCRIPT"
 echo "Args: $@"
 echo "==============================="
 
+echo "GPU info:"
 nvidia-smi || true
 
-python "$SCRIPT" "$@" 2>&1 | tee logs/run-${SLURM_JOB_ID}.log
+echo "Python version:"
+python --version
+
+python "$SCRIPT" "$@" 2>&1 | tee "logs/run-${SLURM_JOB_ID}.log"
 
 echo "Finished at $(date)"
 ```
