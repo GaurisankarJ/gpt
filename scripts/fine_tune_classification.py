@@ -1,5 +1,6 @@
 # python -m scripts.fine_tune_classification --test True
 import argparse
+from typing import Any
 
 import tiktoken
 import torch
@@ -45,6 +46,8 @@ def test_classifier(
     model: nn.Module,
     device: torch.device,
     test_dataloader: DataLoader,
+    tokenizer: Any,
+    train_dataloader: DataLoader,
 ):
     # Load GPT 2 fine-tuned to test
     checkpoint = torch.load(

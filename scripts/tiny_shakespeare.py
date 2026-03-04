@@ -10,7 +10,7 @@ from utils import count_parameters, get_device
 
 HYPER_PARMETERS = {
     "batch_size": 4,
-    "learing_rate": 5e-5,
+    "learning_rate": 5e-5,
     "weight_decay": 0.3,
     "num_epochs": 10,
     "freq_evaluation": 100,
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # Create optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=HYPER_PARMETERS["learing_rate"],
+        lr=HYPER_PARMETERS["learning_rate"],
         weight_decay=HYPER_PARMETERS["weight_decay"],
     )
 

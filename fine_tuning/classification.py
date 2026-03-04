@@ -112,7 +112,7 @@ class TrainerClassification:
         freq_checkpoint: Optional[int] = None,
         model_name: Optional[str] = "gpt",
         save_logs: Optional[bool] = False,
-    ) -> Tuple[float, float, int]:
+    ) -> Tuple[float, float, float, float, int]:
         training_start_time = time.time()
         for epoch in range(num_epochs):
             self.model.train()
@@ -189,4 +189,10 @@ class TrainerClassification:
             model_name=f"{model_name}_final_classification_fine_tuned", epoch=epoch
         )
 
-        return self.train_losses, self.val_losses, self.total_examples_seen
+        return (
+            self.train_losses,
+            self.val_losses,
+            self.train_accuracy,
+            self.val_accuracy,
+            self.total_examples_seen,
+        )
