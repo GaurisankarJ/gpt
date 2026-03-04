@@ -102,111 +102,118 @@ def test_classifier(
 if __name__ == "__main__":
     args = parse_args()
     device = get_device()
+    print(device)
+    print(torch.cuda.is_available())
+    print(torch.cuda.get_device_name(device))
+    print(torch.cuda.get_device_capability(device))
+    print(torch.cuda.get_device_properties(device))
+    print(torch.cuda.get_device_properties(device).total_memory)
+    print(torch.cuda.get_device_properties(device).total_memory)
 
-    # Create GPT model
-    model = GPT_2_Model(GPT_2_MODEL_CONFIG)
-    print(f"{count_parameters(model):,} Parameters")
+    # # Create GPT model
+    # model = GPT_2_Model(GPT_2_MODEL_CONFIG)
+    # print(f"{count_parameters(model):,} Parameters")
 
-    # Load GPT 2
-    model.load_state_dict(
-        torch.load(
-            "./checkpoints/gpt2_small_124m.pth",
-            map_location=device,
-        )
-    )
+    # # Load GPT 2
+    # model.load_state_dict(
+    #     torch.load(
+    #         "./checkpoints/gpt2_small_124m.pth",
+    #         map_location=device,
+    #     )
+    # )
 
-    # Update model parameters
-    for params in model.parameters():
-        params.requires_grad = False
-    num_classes = 2
-    model.out_head = nn.Linear(
-        in_features=GPT_2_MODEL_CONFIG["dim_embedding"],
-        out_features=num_classes,
-    )
-    for params in model.transformer_blocks[-1].parameters():
-        params.requires_grad = True
-    for params in model.norm_final.parameters():
-        params.requires_grad = True
+    # # Update model parameters
+    # for params in model.parameters():
+    #     params.requires_grad = False
+    # num_classes = 2
+    # model.out_head = nn.Linear(
+    #     in_features=GPT_2_MODEL_CONFIG["dim_embedding"],
+    #     out_features=num_classes,
+    # )
+    # for params in model.transformer_blocks[-1].parameters():
+    #     params.requires_grad = True
+    # for params in model.norm_final.parameters():
+    #     params.requires_grad = True
 
-    # Read tsv files to train on and test
-    train_df = read_tsv("sms_spam_train.tsv")
-    val_df = read_tsv("sms_spam_val.tsv")
-    test_df = read_tsv("sms_spam_test.tsv")
+    # # Read tsv files to train on and test
+    # train_df = read_tsv("sms_spam_train.tsv")
+    # val_df = read_tsv("sms_spam_val.tsv")
+    # test_df = read_tsv("sms_spam_test.tsv")
 
-    tokenizer = tiktoken.get_encoding("gpt2")
+    # tokenizer = tiktoken.get_encoding("gpt2")
 
-    # Total training examples
-    print(f"Total Examples: {len(train_df):,}")
+    # # Total training examples
+    # print(f"Total Examples: {len(train_df):,}")
 
-    # Load text data
-    dataloader = ClassificationDataLoader(
-        tokenizer=tokenizer,
-        context_length=GPT_2_MODEL_CONFIG["context_length"],
-        batch_size=HYPERPARMETERS["batch_size"],
-        pad_token="<|endoftext|>",
-    )
-    train_dataloader = dataloader.create_dataloader(
-        dataframe=train_df,
-    )
-    val_dataloader = dataloader.create_dataloader(
-        dataframe=val_df,
-        max_length=train_dataloader.dataset.max_length,
-    )
-    test_dataloader = dataloader.create_dataloader(
-        dataframe=test_df,
-        max_length=train_dataloader.dataset.max_length,
-    )
+    # # Load text data
+    # dataloader = ClassificationDataLoader(
+    #     tokenizer=tokenizer,
+    #     context_length=GPT_2_MODEL_CONFIG["context_length"],
+    #     batch_size=HYPERPARMETERS["batch_size"],
+    #     pad_token="<|endoftext|>",
+    # )
+    # train_dataloader = dataloader.create_dataloader(
+    #     dataframe=train_df,
+    # )
+    # val_dataloader = dataloader.create_dataloader(
+    #     dataframe=val_df,
+    #     max_length=train_dataloader.dataset.max_length,
+    # )
+    # test_dataloader = dataloader.create_dataloader(
+    #     dataframe=test_df,
+    #     max_length=train_dataloader.dataset.max_length,
+    # )
 
-    # Evaluation
-    evaluator = Evaluator(
-        model=model,
-        device=device,
-    )
-    train_accuracy = evaluator.calculate_accuracy_dataloader(
-        dataloader=train_dataloader,
-    )
-    val_accuracy = evaluator.calculate_accuracy_dataloader(
-        dataloader=val_dataloader,
-    )
-    test_accuracy = evaluator.calculate_accuracy_dataloader(
-        dataloader=test_dataloader,
-    )
+    # # Evaluation
+    # evaluator = Evaluator(
+    #     model=model,
+    #     device=device,
+    # )
+    # train_accuracy = evaluator.calculate_accuracy_dataloader(
+    #     dataloader=train_dataloader,
+    # )
+    # val_accuracy = evaluator.calculate_accuracy_dataloader(
+    #     dataloader=val_dataloader,
+    # )
+    # test_accuracy = evaluator.calculate_accuracy_dataloader(
+    #     dataloader=test_dataloader,
+    # )
 
-    print(f"\n{'Dataset':<15} | {'Accuracy':<10}")
-    print("-" * 28)
-    print(f"{'Training':<15} | {train_accuracy:>10.2%}")
-    print(f"{'Validation':<15} | {val_accuracy:>10.2%}")
-    print(f"{'Testing':<15} | {test_accuracy:>10.2%}")
+    # print(f"\n{'Dataset':<15} | {'Accuracy':<10}")
+    # print("-" * 28)
+    # print(f"{'Training':<15} | {train_accuracy:>10.2%}")
+    # print(f"{'Validation':<15} | {val_accuracy:>10.2%}")
+    # print(f"{'Testing':<15} | {test_accuracy:>10.2%}")
 
-    if args.train:
-        # Create optimizer
-        optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=HYPERPARMETERS["learning_rate"],
-            weight_decay=HYPERPARMETERS["weight_decay"],
-        )
+    # if args.train:
+    #     # Create optimizer
+    #     optimizer = torch.optim.AdamW(
+    #         model.parameters(),
+    #         lr=HYPERPARMETERS["learning_rate"],
+    #         weight_decay=HYPERPARMETERS["weight_decay"],
+    #     )
 
-        # Create trainer
-        trainer = TrainerClassification(
-            model=model,
-            optimizer=optimizer,
-            device=device,
-        )
+    #     # Create trainer
+    #     trainer = TrainerClassification(
+    #         model=model,
+    #         optimizer=optimizer,
+    #         device=device,
+    #     )
 
-        # Train
-        trainer.train(
-            train_dataloader=train_dataloader,
-            val_dataloader=val_dataloader,
-            num_epochs=HYPERPARMETERS["num_epochs"],
-            freq_evaluation=HYPERPARMETERS["freq_evaluation"],
-            iter_evaluation=HYPERPARMETERS["iter_evaluation"],
-            save_logs=True,
-            model_name="gpt2",
-        )
+    #     # Train
+    #     trainer.train(
+    #         train_dataloader=train_dataloader,
+    #         val_dataloader=val_dataloader,
+    #         num_epochs=HYPERPARMETERS["num_epochs"],
+    #         freq_evaluation=HYPERPARMETERS["freq_evaluation"],
+    #         iter_evaluation=HYPERPARMETERS["iter_evaluation"],
+    #         save_logs=True,
+    #         model_name="gpt2",
+    #     )
 
-    if args.test:
-        test_classifier(
-            model=model,
-            device=device,
-            test_dataloader=test_dataloader,
-        )
+    # if args.test:
+    #     test_classifier(
+    #         model=model,
+    #         device=device,
+    #         test_dataloader=test_dataloader,
+    #     )
