@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
     model.load_state_dict(
         torch.load(
-            "./checkpoints/qwen3_0.6b.pth",
+            "./checkpoints/qwen3_0.6b_instruct.pth",
             map_location=device,
         )
     )

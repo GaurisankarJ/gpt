@@ -371,3 +371,29 @@ scancel -u $USER
 ```bash
 sbatch run_gpu.sbatch train.py --epochs 10
 ```
+
+---
+
+# 19. Copy Files Between Local and ALICE
+
+### Local to ALICE
+
+Copy a local checkpoint file to the remote `alice` machine:
+
+```bash
+scp ./checkpoints/qwen3_0.6b.pth alice:~/omega/gpt/checkpoints
+```
+
+### ALICE to Local
+
+Sync file from `alice` to your local `./logs` folder:
+
+```bash
+rsync -avz alice:~/omega/gpt/checkpoints/qwen3_0.6b.pth ./checkpoints
+```
+
+Copy a single checkpoint from `alice` to local:
+
+```bash
+scp alice:~/omega/gpt/checkpoints/qwen3_0.6b.pth ./checkpoints
+```
