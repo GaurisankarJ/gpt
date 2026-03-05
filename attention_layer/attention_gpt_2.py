@@ -6,19 +6,19 @@ class MultiHeadAttention_GPT_2(nn.Module):
     def __init__(
         self,
         dim_embedding,
-        num_head,
+        num_heads,
         context_length,
         dropout,
         qkv_bias,
     ):
         super().__init__()
 
-        assert dim_embedding % num_head == 0, (
+        assert dim_embedding % num_heads == 0, (
             "Embedding dimension must be divisible by number of heads."
         )
 
-        self.num_head = num_head
-        self.dim_head = dim_embedding // num_head
+        self.num_heads = num_heads
+        self.dim_head = dim_embedding // num_heads
 
         self.weights_key = nn.Linear(dim_embedding, dim_embedding, bias=qkv_bias)
         self.weights_query = nn.Linear(dim_embedding, dim_embedding, bias=qkv_bias)
@@ -39,11 +39,11 @@ class MultiHeadAttention_GPT_2(nn.Module):
         queries = self.weights_query(x)
         values = self.weights_value(x)
 
-        keys = keys.view(batch, time, self.num_head, self.dim_head).transpose(1, 2)
-        queries = queries.view(batch, time, self.num_head, self.dim_head).transpose(
+        keys = keys.view(batch, time, self.num_heads, self.dim_head).transpose(1, 2)
+        queries = queries.view(batch, time, self.num_heads, self.dim_head).transpose(
             1, 2
         )
-        values = values.view(batch, time, self.num_head, self.dim_head).transpose(1, 2)
+        values = values.view(batch, time, self.num_heads, self.dim_head).transpose(1, 2)
 
         attention_scores = queries @ keys.transpose(-2, -1)
         attention_scores.masked_fill_(self.tril[:time, :time] == 0, -torch.inf)

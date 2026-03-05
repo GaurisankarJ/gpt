@@ -2,7 +2,7 @@ import torch.nn as nn
 
 from attention_layer import MultiHeadAttention_GPT_2
 from feed_forward_layers import FeedForward_GPT_2
-from utils import LayerNorm
+from normalization import LayerNorm
 
 
 class TransformerBlock_GPT_2(nn.Module):

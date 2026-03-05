@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
+from normalization import LayerNorm
 from transformer_blocks import TransformerBlock_GPT_2
-from utils import LayerNorm
 
 GPT2_CONFIG_124M = {
     "vocab_size": 50257,  # Vocabulary size

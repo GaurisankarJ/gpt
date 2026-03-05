@@ -48,7 +48,7 @@ class MultiHeadAttentionNaive(nn.Module):
     def __init__(
         self,
         dim_embedding,
-        num_head,
+        num_heads,
         context_length,
         dropout,
         qkv_bias,
@@ -59,12 +59,12 @@ class MultiHeadAttentionNaive(nn.Module):
             [
                 CausalAttentionHead(
                     dim_embedding=dim_embedding,
-                    dim_head=dim_embedding // num_head,
+                    dim_head=dim_embedding // num_heads,
                     context_length=context_length,
                     dropout=dropout,
                     qkv_bias=qkv_bias,
                 )
-                for _ in range(num_head)
+                for _ in range(num_heads)
             ]
         )
         self.project = nn.Linear(dim_embedding, dim_embedding)
