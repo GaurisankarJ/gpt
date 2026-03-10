@@ -57,6 +57,12 @@ def default_script_args():
         "lora": True,
         "lora_alpha": 16,
         "lora_rank": 16,
+        "wandb": False,
+        "wandb_project": "omega-instruction-tuning",
+        "wandb_run_name": None,
+        "wandb_entity": None,
+        "wandb_tags": [],
+        "wandb_artifacts": False,
     }
 
 
@@ -78,6 +84,10 @@ def run_instruction_script(monkeypatch, default_script_args):
             "scheduler_warmup_init_calls": 0,
             "scheduler_cosine_init_calls": 0,
             "replace_lora_calls": 0,
+            "wandb_init_calls": 0,
+            "wandb_log_calls": [],
+            "wandb_artifact_calls": [],
+            "wandb_finish_calls": 0,
         }
 
         class FakeModel:
@@ -101,6 +111,13 @@ def run_instruction_script(monkeypatch, default_script_args):
             def train(self, **kwargs):
                 calls["trainer_train_calls"] += 1
                 calls["trainer_train_kwargs"] = kwargs
+                checkpoint_callback = kwargs.get("checkpoint_callback")
+                if checkpoint_callback is not None:
+                    checkpoint_callback(
+                        "checkpoints/mock_checkpoint.pth",
+                        {"checkpoint/epoch": 1, "checkpoint/global_step": 0},
+                    )
+                return [0.1], [0.2], [10]
 
         class FakeScheduler:
             def __init__(self, num_epochs, len_train_dataloader):
@@ -168,11 +185,17 @@ def run_instruction_script(monkeypatch, default_script_args):
             calls["parse_args_calls"] += 1
             return args
 
-        def fake_load_model(model_size, checkpoint_path, device):
+        def fake_load_model(
+            model_size, checkpoint_path, device, mode=False, lora=False, lora_rank=16, lora_alpha=16
+        ):
             calls["load_model_args"] = {
                 "model_size": model_size,
                 "checkpoint_path": checkpoint_path,
                 "device": device,
+                "mode": mode,
+                "lora": lora,
+                "lora_rank": lora_rank,
+                "lora_alpha": lora_alpha,
             }
             return FakeModel(), {"num_layers": 2, "context_length": 64}
 
@@ -252,6 +275,40 @@ def run_instruction_script(monkeypatch, default_script_args):
         utils_runtime_module = types.ModuleType("utils")
         utils_runtime_module.get_device = lambda: torch.device("cpu")
 
+        class FakeWandbRun:
+            def __init__(self):
+                self.summary = {}
+
+            def log(self, payload):
+                calls["wandb_log_calls"].append(payload)
+
+            def log_artifact(self, artifact):
+                calls["wandb_artifact_calls"].append(artifact)
+
+            def finish(self):
+                calls["wandb_finish_calls"] += 1
+
+        class FakeWandbArtifact:
+            def __init__(self, name, type, metadata):
+                self.name = name
+                self.type = type
+                self.metadata = metadata
+                self.files = []
+
+            def add_file(self, path):
+                self.files.append(path)
+
+        wandb_module = types.ModuleType("wandb")
+
+        def fake_wandb_init(**kwargs):
+            calls["wandb_init_calls"] += 1
+            calls["wandb_init_kwargs"] = kwargs
+            return FakeWandbRun()
+
+        wandb_module.init = fake_wandb_init
+        wandb_module.define_metric = lambda *args, **kwargs: None
+        wandb_module.Artifact = FakeWandbArtifact
+
         monkeypatch.setitem(
             sys.modules, "scripts.fine_tune_instruction_utils", utils_module
         )
@@ -261,6 +318,7 @@ def run_instruction_script(monkeypatch, default_script_args):
         monkeypatch.setitem(sys.modules, "parameter_efficient_fine_tuning", peft_module)
         monkeypatch.setitem(sys.modules, "tokenizer", tokenizer_module)
         monkeypatch.setitem(sys.modules, "utils", utils_runtime_module)
+        monkeypatch.setitem(sys.modules, "wandb", wandb_module)
 
         runpy.run_module("scripts.fine_tune_instruction", run_name="__main__")
         return calls

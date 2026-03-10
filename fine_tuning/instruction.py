@@ -1,5 +1,5 @@
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -30,6 +30,10 @@ class TrainerInstructionFineTuning:
         self.epochs_eval = []
         self.tokens_seen = 0
         self.global_steps = -1
+        self.step_metrics_history: List[Dict[str, float | int | None]] = []
+        self.eval_metrics_history: List[Dict[str, float | int]] = []
+        self.epoch_metrics_history: List[Dict[str, float | int]] = []
+        self.checkpoint_paths: List[str] = []
 
         self.evaluator = EvaluatorInstructionFineTuning(
             model=model,
@@ -41,6 +45,10 @@ class TrainerInstructionFineTuning:
         self.val_losses.clear()
         self.total_tokens_seen.clear()
         self.epochs_eval.clear()
+        self.step_metrics_history.clear()
+        self.eval_metrics_history.clear()
+        self.epoch_metrics_history.clear()
+        self.checkpoint_paths.clear()
         self.tokens_seen = 0
         self.global_steps = -1
 
@@ -152,7 +160,7 @@ class TrainerInstructionFineTuning:
         epoch: int,
         progress_bar: tqdm,
         step_loss: float,
-    ) -> None:
+    ) -> Dict[str, float | int]:
         train_loss, val_loss = self.evaluator.evaluate_model(
             train_dataloader=train_dataloader,
             val_dataloader=val_dataloader,
@@ -181,12 +189,26 @@ class TrainerInstructionFineTuning:
             }
         )
 
+        metrics = {
+            "eval/global_step": int(self.global_steps),
+            "eval/epoch": int(epoch + 1),
+            "eval/train_loss": float(train_loss),
+            "eval/val_loss": float(val_loss),
+            "eval/tokens_seen": int(self.tokens_seen),
+            "eval/epoch_progress": float(epoch_progress),
+            "eval/step_loss": float(step_loss),
+        }
+
+        self.eval_metrics_history.append(metrics)
+
+        return metrics
+
     def save_checkpoint(
         self,
         model_name: str,
         epoch: int,
-    ) -> None:
-        save_checkpoint(
+    ) -> str:
+        checkpoint_path = save_checkpoint(
             model=self.model,
             optimizer=self.optimizer,
             model_name=model_name,
@@ -198,6 +220,10 @@ class TrainerInstructionFineTuning:
             total_tokens_seen=self.total_tokens_seen,
             epochs_eval=self.epochs_eval,
         )
+
+        self.checkpoint_paths.append(checkpoint_path)
+
+        return checkpoint_path
 
     def print_epoch_footer(
         self,
@@ -253,6 +279,12 @@ class TrainerInstructionFineTuning:
         learning_rate_scheduler: Optional[LearningRateScheduler] = None,
         warmup: Optional[bool] = False,
         cosine_decay: Optional[bool] = False,
+        step_callback: Optional[Callable[[Dict[str, float | int | None]], None]] = None,
+        eval_callback: Optional[Callable[[Dict[str, float | int]], None]] = None,
+        epoch_callback: Optional[Callable[[Dict[str, float | int]], None]] = None,
+        checkpoint_callback: Optional[
+            Callable[[str, Dict[str, float | int]], None]
+        ] = None,
     ) -> Tuple[List[float], List[float], List[int]]:
         self.reset_training_state()
         self.training_start_time = time.time()
@@ -301,10 +333,15 @@ class TrainerInstructionFineTuning:
                 )
 
                 loss.backward()
+                grad_norm = None
                 if grad_clip is not None:
-                    torch.nn.utils.clip_grad_norm_(
+                    grad_norm_tensor = torch.nn.utils.clip_grad_norm_(
                         self.model.parameters(), max_norm=grad_clip
                     )
+                    if isinstance(grad_norm_tensor, torch.Tensor):
+                        grad_norm = float(grad_norm_tensor.item())
+                    else:
+                        grad_norm = float(grad_norm_tensor)
 
                 next_step = self.global_steps + 1
                 if learning_rate_scheduler is not None:
@@ -323,6 +360,25 @@ class TrainerInstructionFineTuning:
                 self.tokens_seen += (target_batch != -100).sum().item()
                 self.global_steps += 1
 
+                elapsed_train_seconds = time.time() - self.training_start_time
+                current_lr = float(self.optimizer.param_groups[0]["lr"])
+                step_tokens_per_second = self.tokens_seen / max(
+                    elapsed_train_seconds, 1e-9
+                )
+                step_metrics: Dict[str, float | int | None] = {
+                    "train/global_step": int(self.global_steps),
+                    "train/epoch": int(epoch + 1),
+                    "train/epoch_step": int(epoch_steps),
+                    "train/loss": float(step_loss),
+                    "train/lr": current_lr,
+                    "train/tokens_seen": int(self.tokens_seen),
+                    "train/tok_per_sec": float(step_tokens_per_second),
+                    "train/grad_norm": grad_norm,
+                }
+                self.step_metrics_history.append(step_metrics)
+                if step_callback is not None:
+                    step_callback(step_metrics)
+
                 if epoch_steps % progress_update_freq == 0 or epoch_steps == len(
                     train_dataloader
                 ):
@@ -338,7 +394,7 @@ class TrainerInstructionFineTuning:
                     self.global_steps % freq_evaluation == 0
                     or (self.global_steps + 1) % len(train_dataloader) == 0
                 ):
-                    self.evaluate_model(
+                    eval_metrics = self.evaluate_model(
                         train_dataloader=train_dataloader,
                         val_dataloader=val_dataloader,
                         iter_evaluation=iter_evaluation,
@@ -346,11 +402,23 @@ class TrainerInstructionFineTuning:
                         progress_bar=progress_bar,
                         step_loss=step_loss,
                     )
+                    if eval_callback is not None:
+                        eval_callback(eval_metrics)
 
             progress_bar.close()
 
             if freq_checkpoint and (epoch + 1) % freq_checkpoint == 0:
-                self.save_checkpoint(model_name=model_name, epoch=epoch)
+                checkpoint_path = self.save_checkpoint(
+                    model_name=model_name, epoch=epoch
+                )
+                if checkpoint_callback is not None:
+                    checkpoint_callback(
+                        checkpoint_path,
+                        {
+                            "checkpoint/epoch": int(epoch + 1),
+                            "checkpoint/global_step": int(self.global_steps),
+                        },
+                    )
 
             if generator:
                 generate_prompt(
@@ -368,6 +436,15 @@ class TrainerInstructionFineTuning:
                 epoch_avg_loss=avg_epoch_loss,
                 epoch_time_seconds=epoch_execution_time_seconds,
             )
+            epoch_metrics = {
+                "epoch/index": int(epoch + 1),
+                "epoch/avg_loss": float(avg_epoch_loss),
+                "epoch/time_seconds": float(epoch_execution_time_seconds),
+                "epoch/tokens_seen": int(self.tokens_seen),
+            }
+            self.epoch_metrics_history.append(epoch_metrics)
+            if epoch_callback is not None:
+                epoch_callback(epoch_metrics)
 
             if save_logs:
                 self.save_csv_logs_metrics(
@@ -388,6 +465,16 @@ class TrainerInstructionFineTuning:
             f"Avg Throughput: {training_tokens_per_second:.0f} tok/s"
         )
 
-        self.save_checkpoint(model_name=f"{model_name}_final", epoch=num_epochs - 1)
+        final_checkpoint_path = self.save_checkpoint(
+            model_name=f"{model_name}_final", epoch=num_epochs - 1
+        )
+        if checkpoint_callback is not None:
+            checkpoint_callback(
+                final_checkpoint_path,
+                {
+                    "checkpoint/epoch": int(num_epochs),
+                    "checkpoint/global_step": int(self.global_steps),
+                },
+            )
 
         return self.train_losses, self.val_losses, self.total_tokens_seen

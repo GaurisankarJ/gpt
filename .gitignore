@@ -5,3 +5,5 @@ char_gpt/
 logs/
 .ipynb_checkpoints/
 data/
+.env
+wandb/

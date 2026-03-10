@@ -13,6 +13,14 @@ This project includes a script-based pipeline for instruction fine-tuning and ev
 python -m pip install -r requirements.txt
 ```
 
+### wandb Setup (optional)
+
+```bash
+python -m pip install wandb
+wandb login
+python -m scripts.fine_tune_instruction --train --wandb --wandb_project sft
+```
+
 ## Run the Script
 
 At least one mode is required:
@@ -60,9 +68,9 @@ python -m scripts.fine_tune_instruction \
 Run the full validated fine-tuning + script test suites (single command):
 
 ```bash
-python -m pytest -q tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
+python -m pytest -q tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py tests/scripts/test_wandb.py
 
-python -m pytest -vv -rP tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
+python -m pytest -vv -rP tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py tests/scripts/test_wandb.py
 ```
 
 Run every test in the repository:
@@ -127,6 +135,12 @@ Note: boolean flags use `BooleanOptionalAction`, so you can pass either `--flag`
 - `--iter_evaluation` (default: `50`): number of batches used during each evaluation call.
 - `--evaluation_model` (default: `llama3.2:3b`): model used in `--eval` scoring.
 - `--save_logs` / `--no-save_logs` (default: `True`): save CSV logs from trainer.
+- `--wandb` / `--no-wandb` (default: `False`): enable/disable Weights & Biases experiment tracking.
+- `--wandb_project` (default: `omega-instruction-tuning`): wandb project name.
+- `--wandb_run_name` (default: `None`): optional wandb run display name.
+- `--wandb_entity` (default: `None`): optional wandb entity/user/team.
+- `--wandb_tags` (default: `[]`): optional wandb tags (space-separated list).
+- `--wandb_artifacts` / `--no-wandb_artifacts` (default: `False`): enable/disable wandb dataset/checkpoint artifact uploads.
 - `--show_progress_bar` / `--no-show_progress_bar` (default: `True`): toggle tqdm progress display.
 - `--progress_update_freq` (default: `20`): update tqdm postfix every N steps.
 - `--freq_checkpoint` (default: `None`): save checkpoint every N epochs (`None` disables periodic checkpointing).
@@ -152,3 +166,4 @@ Note: boolean flags use `BooleanOptionalAction`, so you can pass either `--flag`
 - `--initial_learning_rates`, `--peak_learning_rates`
 - `--learning_rate_warmup_percentage`, `--minimum_learning_rates_percentage`
 - `--lora`, `--lora_alpha`, `--lora_rank`
+- `--wandb`, `--wandb_project`, `--wandb_run_name`, `--wandb_entity`, `--wandb_tags`, `--wandb_artifacts`

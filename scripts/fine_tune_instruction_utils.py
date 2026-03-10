@@ -268,6 +268,43 @@ def parse_args(HYPERPARAMETER_INSTRUCTION_TUNING: dict) -> argparse.Namespace:
         default=HYPERPARAMETER_INSTRUCTION_TUNING["lora_rank"],
         help="LoRA rank",
     )
+    parser.add_argument(
+        "--wandb",
+        action=argparse.BooleanOptionalAction,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb"],
+        help="Enable Weights & Biases logging",
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb_project"],
+        help="Weights & Biases project name",
+    )
+    parser.add_argument(
+        "--wandb_run_name",
+        type=str,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb_run_name"],
+        help="Optional Weights & Biases run name",
+    )
+    parser.add_argument(
+        "--wandb_entity",
+        type=str,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb_entity"],
+        help="Optional Weights & Biases entity/user/team",
+    )
+    parser.add_argument(
+        "--wandb_tags",
+        type=str,
+        nargs="*",
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb_tags"],
+        help="Optional Weights & Biases tags",
+    )
+    parser.add_argument(
+        "--wandb_artifacts",
+        action=argparse.BooleanOptionalAction,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["wandb_artifacts"],
+        help="Enable Weights & Biases artifact uploads",
+    )
 
     return parser.parse_args()
 

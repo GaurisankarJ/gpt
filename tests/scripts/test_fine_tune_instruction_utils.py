@@ -54,6 +54,12 @@ TEST_DEFAULTS = {
     "lora": True,
     "lora_alpha": 16,
     "lora_rank": 16,
+    "wandb": False,
+    "wandb_project": "omega-instruction-tuning",
+    "wandb_run_name": None,
+    "wandb_entity": None,
+    "wandb_tags": [],
+    "wandb_artifacts": False,
 }
 
 
@@ -74,6 +80,12 @@ def test_parse_args_defaults(monkeypatch):
     assert args.lora is TEST_DEFAULTS["lora"]
     assert args.lora_alpha == TEST_DEFAULTS["lora_alpha"]
     assert args.lora_rank == TEST_DEFAULTS["lora_rank"]
+    assert args.wandb is TEST_DEFAULTS["wandb"]
+    assert args.wandb_project == TEST_DEFAULTS["wandb_project"]
+    assert args.wandb_run_name == TEST_DEFAULTS["wandb_run_name"]
+    assert args.wandb_entity == TEST_DEFAULTS["wandb_entity"]
+    assert args.wandb_tags == TEST_DEFAULTS["wandb_tags"]
+    assert args.wandb_artifacts is TEST_DEFAULTS["wandb_artifacts"]
     assert args.save_logs is True
 
 
@@ -140,6 +152,17 @@ def test_parse_args_overrides_non_boolean_and_list_values(monkeypatch):
             "32",
             "--lora_rank",
             "8",
+            "--wandb",
+            "--wandb_project",
+            "proj-x",
+            "--wandb_run_name",
+            "run-y",
+            "--wandb_entity",
+            "team-z",
+            "--wandb_tags",
+            "t1",
+            "t2",
+            "--wandb_artifacts",
         ],
     )
     assert args.train and args.test and args.eval
@@ -153,6 +176,12 @@ def test_parse_args_overrides_non_boolean_and_list_values(monkeypatch):
     assert args.minimum_learning_rates_percentage == 5
     assert args.lora_alpha == 32
     assert args.lora_rank == 8
+    assert args.wandb is True
+    assert args.wandb_project == "proj-x"
+    assert args.wandb_run_name == "run-y"
+    assert args.wandb_entity == "team-z"
+    assert args.wandb_tags == ["t1", "t2"]
+    assert args.wandb_artifacts is True
 
 
 @pytest.mark.parametrize(
@@ -170,6 +199,8 @@ def test_parse_args_overrides_non_boolean_and_list_values(monkeypatch):
         ("warmup", "warmup"),
         ("cosine_decay", "cosine_decay"),
         ("lora", "lora"),
+        ("wandb", "wandb"),
+        ("wandb_artifacts", "wandb_artifacts"),
     ],
 )
 def test_parse_args_boolean_optional_toggles(monkeypatch, flag, attr):

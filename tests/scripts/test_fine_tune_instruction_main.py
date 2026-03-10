@@ -41,6 +41,48 @@ def test_main_train_path_wires_scheduler_and_trainer(run_instruction_script):
     assert calls["trainer_train_kwargs"]["cosine_decay"] is True
 
 
+def test_main_wandb_enabled_initializes_and_finishes_run(run_instruction_script):
+    calls = run_instruction_script(
+        {
+            "train": False,
+            "test": False,
+            "eval": True,
+            "wandb": True,
+            "wandb_project": "proj",
+            "wandb_run_name": "run1",
+            "wandb_entity": "me",
+            "wandb_tags": ["smoke", "eval"],
+        }
+    )
+
+    assert calls["wandb_init_calls"] == 1
+    assert calls["wandb_init_kwargs"]["project"] == "proj"
+    assert calls["wandb_init_kwargs"]["name"] == "run1"
+    assert calls["wandb_init_kwargs"]["entity"] == "me"
+    assert calls["wandb_init_kwargs"]["tags"] == ["smoke", "eval"]
+    assert calls["wandb_finish_calls"] == 1
+
+
+def test_main_wandb_checkpoint_callback_logs_payload_and_artifact(run_instruction_script):
+    calls = run_instruction_script(
+        {
+            "train": True,
+            "test": False,
+            "eval": False,
+            "wandb": True,
+            "wandb_artifacts": True,
+            "model_name": "ckpt_test",
+        }
+    )
+
+    assert calls["wandb_init_calls"] == 1
+    assert {"checkpoint/epoch": 1, "checkpoint/global_step": 0} in calls[
+        "wandb_log_calls"
+    ]
+    assert len(calls["wandb_artifact_calls"]) >= 1
+    assert calls["wandb_artifact_calls"][0].type == "model"
+
+
 def test_main_train_without_lora_skips_replacement(run_instruction_script):
     calls = run_instruction_script(
         {
@@ -169,6 +211,12 @@ def test_end_to_end_pipeline_with_one_entry_dataset(monkeypatch, tmp_path):
         lora=False,
         lora_alpha=16,
         lora_rank=16,
+        wandb=False,
+        wandb_project="omega-instruction-tuning",
+        wandb_run_name=None,
+        wandb_entity=None,
+        wandb_tags=[],
+        wandb_artifacts=False,
     )
 
     calls = {"train": 0, "test": 0, "eval": 0, "split_sizes": None}
@@ -190,6 +238,7 @@ def test_end_to_end_pipeline_with_one_entry_dataset(monkeypatch, tmp_path):
         def train(self, **kwargs):
             calls["train"] += 1
             assert kwargs["num_epochs"] == 1
+            return [0.1], [0.2], [10]
 
     class FakeScheduler:
         def __init__(self, num_epochs, len_train_dataloader):
@@ -221,8 +270,10 @@ def test_end_to_end_pipeline_with_one_entry_dataset(monkeypatch, tmp_path):
     def fake_parse_args(_defaults):
         return args
 
-    def fake_load_model(model_size, checkpoint_path, device):
-        del model_size, checkpoint_path, device
+    def fake_load_model(
+        model_size, checkpoint_path, device, mode=False, lora=False, lora_rank=16, lora_alpha=16
+    ):
+        del model_size, checkpoint_path, device, mode, lora, lora_rank, lora_alpha
         return FakeModel(), {"num_layers": 1, "context_length": 16}
 
     def fake_load_and_split_dataset(dataset_file_path, shuffle_before_split, seed):

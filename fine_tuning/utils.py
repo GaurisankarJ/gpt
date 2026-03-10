@@ -38,7 +38,7 @@ def generate_prompt(
         cache_enabled=True,
     )
     print(
-        f"Sample Model Output: \n{generator.token_ids_to_text(output.squeeze(0))[len(prompt) :].strip()}"
+        f"Sample Model Output: \n{generator.token_ids_to_text(output.squeeze(0)).strip()}"
     )
 
 
@@ -53,7 +53,7 @@ def save_checkpoint(
     val_losses: list[float] = [],
     total_tokens_seen: int = 0,
     epochs_eval: int = 0,
-) -> None:
+) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     folder = "checkpoints"
@@ -79,6 +79,8 @@ def save_checkpoint(
     )
 
     print(f"Checkpoint for {model_name} saved to: {full_path}.")
+
+    return full_path
 
 
 def classify_review(
