@@ -410,6 +410,11 @@ def test_train_calls_gradient_clip_when_enabled(trainer, monkeypatch):
         return torch.tensor(0.0)
 
     monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", fake_clip_grad_norm_)
+    monkeypatch.setattr(
+        instruction_module,
+        "save_checkpoint",
+        lambda **kwargs: "checkpoints/mock_checkpoint.pth",
+    )
     scheduler = LearningRateScheduler(num_epochs=1, len_train_dataloader=len(train_loader))
     scheduler.initial_learning_rates = [0.0]
     scheduler.peak_learning_rates = [0.01]
