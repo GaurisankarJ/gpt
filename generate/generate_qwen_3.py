@@ -16,38 +16,51 @@ class Generator_Qwen_3:
         tokenizer_file_path: str = "./tokenizer/qwen_3_instruct_tokenizer.json",
         model_type: Literal["thinking", "instruct", "base"] = "instruct",
         model_size: Literal["0.6B", "1.7B", "4B", "8B", "14B", "32B"] = "0.6B",
+        apply_chat_template: Optional[bool] = None,
+        add_generation_prompt: Optional[bool] = None,
+        add_thinking: Optional[bool] = None,
     ) -> None:
         self.model = model
         self.context_length = context_length
         self.eps = 1e-5
         self.device = next(model.parameters()).device
 
-        if model_type == "thinking":
-            repo_id = f"Qwen/Qwen3-{model_size}"
+        if (
+            apply_chat_template is None
+            and add_generation_prompt is None
+            and add_thinking is None
+        ):
+            if model_type == "thinking":
+                tokenizer = Qwen_3_Tokenizer(
+                    tokenizer_file_path=tokenizer_file_path,
+                    model_type=model_type,
+                    apply_chat_template=True,
+                    add_generation_prompt=True,
+                    add_thinking=True,
+                )
+            elif model_type == "instruct":
+                tokenizer = Qwen_3_Tokenizer(
+                    tokenizer_file_path=tokenizer_file_path,
+                    model_type=model_type,
+                    apply_chat_template=True,
+                    add_generation_prompt=True,
+                    add_thinking=False,
+                )
+            elif model_type == "base":
+                tokenizer = Qwen_3_Tokenizer(
+                    tokenizer_file_path=tokenizer_file_path,
+                    model_type=model_type,
+                    apply_chat_template=False,
+                    add_generation_prompt=False,
+                    add_thinking=False,
+                )
+        else:
             tokenizer = Qwen_3_Tokenizer(
                 tokenizer_file_path=tokenizer_file_path,
-                repo_id=repo_id,
-                apply_chat_template=True,
-                add_generation_prompt=True,
-                add_thinking=True,
-            )
-        elif model_type == "instruct":
-            repo_id = f"Qwen/Qwen3-{model_size}"
-            tokenizer = Qwen_3_Tokenizer(
-                tokenizer_file_path=tokenizer_file_path,
-                repo_id=repo_id,
-                apply_chat_template=True,
-                add_generation_prompt=True,
-                add_thinking=False,
-            )
-        elif model_type == "base":
-            repo_id = f"Qwen/Qwen3-{model_size}-Base"
-            tokenizer = Qwen_3_Tokenizer(
-                tokenizer_file_path=tokenizer_file_path,
-                repo_id=repo_id,
-                apply_chat_template=False,
-                add_generation_prompt=False,
-                add_thinking=False,
+                model_type=model_type,
+                apply_chat_template=apply_chat_template,
+                add_generation_prompt=add_generation_prompt,
+                add_thinking=add_thinking,
             )
 
         self.tokenizer = tokenizer
@@ -56,9 +69,10 @@ class Generator_Qwen_3:
     def text_to_token_ids(
         self,
         text: str,
+        chat_wrapped: Optional[bool] = None,
     ) -> torch.Tensor:
         return torch.tensor(
-            self.tokenizer.encode(text),
+            self.tokenizer.encode(text=text, chat_wrapped=chat_wrapped),
             device=self.device,
         )
 
@@ -134,12 +148,12 @@ class Generator_Qwen_3:
                 else:
                     idx_next = torch.argmax(logits, dim=-1, keepdims=True)
 
+                idx = torch.cat((idx, idx_next), dim=-1)
+
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id
                 ):
                     break
-
-                idx = torch.cat((idx, idx_next), dim=-1)
 
                 logits = self.model(idx_next, cache=self.cache)
 
@@ -167,12 +181,12 @@ class Generator_Qwen_3:
                 else:
                     idx_next = torch.argmax(logits, dim=-1, keepdims=True)
 
+                idx = torch.cat((idx, idx_next), dim=-1)
+
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id
                 ):
                     break
-
-                idx = torch.cat((idx, idx_next), dim=-1)
 
             return idx
 

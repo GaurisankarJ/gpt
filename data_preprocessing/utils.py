@@ -1,6 +1,8 @@
+import json
 import os
 import zipfile
 from pathlib import Path
+from typing import Dict, List
 
 import pandas as pd
 import requests
@@ -48,6 +50,12 @@ def download_the_verdict_data():
     download_data(url, filename)
 
 
+def download_instruction_tuning_data():
+    url = "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch07/01_main-chapter-code/instruction-data.json"
+    filename = "instruction_tuning_data.json"
+    download_data(url, filename)
+
+
 def read_file(file_name: str) -> str:
     full_path = os.path.join(DATA_PATH, file_name)
 
@@ -66,6 +74,22 @@ def read_tsv(file_name: str) -> pd.DataFrame:
     )
 
     return tsv
+
+
+def read_json(file_name: str) -> List[Dict[str, str]]:
+    full_path = os.path.join(DATA_PATH, file_name)
+
+    with open(full_path, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+
+    return json_data
+
+
+def save_json(data: List[Dict[str, str]], file_name: str) -> None:
+    full_path = os.path.join(DATA_PATH, file_name)
+    with open(full_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    print(f"Saved {file_name} to {full_path}")
 
 
 def unzip_file(zip_name: str):
@@ -92,3 +116,17 @@ def unzip_and_rename_sms_spam_data():
     zip_name = "sms_spam_collection.zip"
     unzip_file(zip_name)
     rename_tsv("SMSSpamCollection", "sms_spam")
+
+
+# Qwen3 format
+def format_instruction_tuning_data(entry: Dict[str, str]) -> Dict[str, str]:
+    input_text = f": {entry['input']}" if entry["input"] else ""
+    formatted_input = (
+        f"<|im_start|>user\n{entry['instruction']}{input_text}\n<|im_end|>\n"
+    )
+    formatted_output = f"<|im_start|>assistant\n{entry['output']}\n<|im_end|>"
+
+    return {
+        "input": formatted_input,
+        "output": formatted_output,
+    }

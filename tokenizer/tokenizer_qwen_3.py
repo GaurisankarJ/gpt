@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import List, Literal, Optional
 
 from tokenizers import Tokenizer
 
@@ -27,11 +28,11 @@ class Qwen_3_Tokenizer:
 
     def __init__(
         self,
-        tokenizer_file_path="tokenizer.json",
-        repo_id=None,
-        apply_chat_template=True,
-        add_generation_prompt=False,
-        add_thinking=False,
+        tokenizer_file_path: str = "./tokenizer/qwen_3_instruct_tokenizer.json",
+        model_type: Literal["base", "instruct", "thinking"] = "instruct",
+        apply_chat_template: bool = True,
+        add_generation_prompt: bool = False,
+        add_thinking: bool = False,
     ):
         self.apply_chat_template = apply_chat_template
         self.add_generation_prompt = add_generation_prompt
@@ -48,14 +49,15 @@ class Qwen_3_Tokenizer:
         self.pad_token_id = self._special_to_id["<|endoftext|>"]
         self.eos_token_id = self.pad_token_id
 
-        if repo_id and "Base" not in repo_id:
-            eos_token = "<|im_end|>"
-        else:
+        if model_type == "base":
             eos_token = "<|endoftext|>"
+        elif model_type in ["instruct", "thinking"]:
+            eos_token = "<|im_end|>"
+
         if eos_token in self._special_to_id:
             self.eos_token_id = self._special_to_id[eos_token]
 
-    def encode(self, text, chat_wrapped=None):
+    def encode(self, text: str, chat_wrapped: Optional[bool] = None) -> List[int]:
         if chat_wrapped is None:
             chat_wrapped = self.apply_chat_template
 
@@ -72,15 +74,28 @@ class Qwen_3_Tokenizer:
                 ids.append(self._special_to_id[part])
             else:
                 ids.extend(self._tok.encode(part).ids)
+
         return ids
 
-    def decode(self, ids):
-        return self._tok.decode(ids, skip_special_tokens=False)
+    def decode(
+        self,
+        ids: List[int],
+        skip_special_tokens: Optional[bool] = None,
+    ) -> str:
+        if skip_special_tokens is None:
+            skip_special_tokens = False
 
-    def _wrap_chat(self, user_msg):
+        return self._tok.decode(ids, skip_special_tokens=skip_special_tokens)
+
+    def _wrap_chat(
+        self,
+        user_msg: str,
+    ) -> str:
         s = f"<|im_start|>user\n{user_msg}<|im_end|>\n"
+
         if self.add_generation_prompt:
             s += "<|im_start|>assistant"
+
             if self.add_thinking:
                 s += "\n"
             else:

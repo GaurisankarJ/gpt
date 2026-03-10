@@ -1,399 +1,126 @@
+## Instruction Fine-Tuning
 
-# ALICE GPU + Conda + Slurm Cheat Sheet
+This project includes a script-based pipeline for instruction fine-tuning and evaluation:
+- Script entrypoint: `scripts/fine_tune_instruction.py`
+- CLI + helpers: `scripts/fine_tune_instruction_utils.py`
 
-This is a practical, quick reference for working on the **ALICE HPC cluster** with **Python (conda)** and **A100 GPUs**.
+## Setup
 
----
-
-# 1. Connect to ALICE
-
-If using **eduVPN**, connect directly.
-
-```bash
-ssh alice
-````
-
-Example SSH config (`~/.ssh/config`):
-
-```ssh
-Host alice
-    HostName login.alice.universiteitleiden.nl
-    User s4374886
-    IdentityFile ~/.ssh/id_rsa_alice
-```
-
----
-
-# 2. Useful SLURM Commands
-
-### Show cluster partitions
+1. Create/activate your virtual environment.
+2. Install dependencies:
 
 ```bash
-sinfo
+python -m pip install -r requirements.txt
 ```
 
-### Show your jobs
+## Run the Script
+
+At least one mode is required:
+- `--train` for fine-tuning
+- `--test` for evaluation + generating responses on test split
+
+### Train
 
 ```bash
-squeue -u $USER
+python -m scripts.fine_tune_instruction --train
 ```
 
-### Show estimated start time
+### Test
 
 ```bash
-squeue --start -j JOBID
+python -m scripts.fine_tune_instruction --test
 ```
 
-### Detailed job info
+### Train + Test in one run
 
 ```bash
-scontrol show job JOBID
+python -m scripts.fine_tune_instruction --train --test
 ```
 
-### Cancel job
+### Example with custom options
 
 ```bash
-scancel JOBID
+python -m scripts.fine_tune_instruction \
+  --train \
+  --model_name qwen3_0.6b_base_run1 \
+  --checkpoint_path qwen3_0.6b_base \
+  --dataset_file_path instruction_tuning_data.json \
+  --batch_size 2 \
+  --max_length 1024 \
+  --learning_rate 5e-5 \
+  --num_epochs 1 \
+  --freq_evaluation 100 \
+  --iter_evaluation 50 \
+  --show_progress_bar \
+  --save_logs
 ```
 
----
+## Testing
 
-# 3. Load Conda Environment
-
-Always load modules first.
+Run the targeted script test suite:
 
 ```bash
-module purge
-module load ALICE/default
-module load Miniconda3/24.7.1-0
+python -m pytest -q tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
 ```
 
-Activate conda:
+Run all tests:
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate gpt
+python -m pytest -q
 ```
 
----
+## CLI Arguments (`scripts/fine_tune_instruction.py`)
 
-# 4. Create Python 3.11 Environment
+Note: boolean flags use `BooleanOptionalAction`, so you can pass either `--flag` or `--no-flag`.
 
-```bash
-conda create -n gpt -c conda-forge python=3.11 -y
-conda activate gpt
-```
+### Mode flags
 
-Check version:
+- `--train` (default: `False`): enable training path.
+- `--test` (default: `False`): enable evaluation + response generation path.
 
-```bash
-python --version
-```
+### Model and tokenizer
 
----
+- `--model_name` (default: `qwen3_0.6b_base`): run/model label used in output names.
+- `--model_size` (default: `0.6B`): model config key for `get_qwen3_config`.
+- `--model_type` (default: `base`): model type passed into generator.
+- `--tokenizer_file_path` (default: `./tokenizer/qwen_3_instruct_tokenizer.json`): tokenizer JSON path.
+- `--repo_id` (default: `Qwen/Qwen3-0.6B-Base`): tokenizer/model repo id.
+- `--checkpoint_path` (default: `qwen3_0.6b_base`): checkpoint basename loaded from `./checkpoints/<name>.pth`.
 
-# 5. Interactive GPU Session (Debugging)
+### Prompt formatting
 
-Get an A100 GPU shell:
+- `--apply_chat_template` / `--no-apply_chat_template` (default: `True`): apply tokenizer chat template.
+- `--add_generation_prompt` / `--no-add_generation_prompt` (default: `True`): append generation prompt tokens.
+- `--add_thinking` / `--no-add_thinking` (default: `False`): include thinking tags where supported.
 
-```bash
-srun \
---partition=gpu-a100-80g \
---gres=gpu:1 \
---cpus-per-task=8 \
---mem=80G \
---time=04:00:00 \
---pty bash
-```
+### Dataset and split
 
-Check GPU:
+- `--dataset_file_path` (default: `instruction_tuning_data.json`): input dataset JSON file.
+- `--shuffle_before_split` / `--no-shuffle_before_split` (default: `True`): shuffle dataset before 85/10/5 split.
+- `--seed` (default: `42`): random seed used for pre-split shuffle.
 
-```bash
-nvidia-smi
-```
+### Dataloader and sequence settings
 
-Run your script:
+- `--batch_size` (default: `4`): batch size for train/val/test dataloaders.
+- `--shuffle` / `--no-shuffle` (default: `True`): shuffle training dataloader.
+- `--drop_last` / `--no-drop_last` (default: `True`): drop incomplete final batch in training dataloader.
+- `--num_workers` (default: `0`): dataloader workers.
+- `--ignore_index` (default: `-100`): label ignore index for loss.
+- `--mask_inputs` / `--no-mask_inputs` (default: `True`): mask user prompt tokens in labels.
+- `--max_length` (default: `256`): max sequence length (also used as generation max length in test mode).
 
-```bash
-python train.py
-```
+### Optimization and scheduling
 
----
+- `--learning_rate` (default: `5e-5`): AdamW learning rate.
+- `--weight_decay` (default: `0.3`): AdamW weight decay.
+- `--num_epochs` (default: `1`): number of training epochs.
+- `--grad_clip` (default: `1.0`): gradient clipping max norm; values `<= 0` disable clipping.
 
-# 6. Batch Job Submission
+### Logging, evaluation, checkpoints
 
-Submit a job with Slurm:
-
-```bash
-sbatch run_gpu.sbatch train.py
-```
-
-With arguments:
-
-```bash
-sbatch run_gpu.sbatch train.py --lr 0.001 --epochs 10
-```
-
----
-
-# 7. Generic GPU Runner Script
-
-`run_gpu.sbatch`
-
-```bash
-#!/bin/bash
-#SBATCH --job-name=python-gpu
-#SBATCH --partition=gpu-a100-80g
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=80G
-#SBATCH --time=12:00:00
-#SBATCH --chdir=.
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
-
-set -euo pipefail
-
-# Always execute from the directory where you ran sbatch
-cd "${SLURM_SUBMIT_DIR:-$PWD}"
-
-# Use the existing logs folder in the project root
-LOGDIR="$PWD/logs"
-mkdir -p "$LOGDIR"
-
-if [ $# -lt 1 ]; then
-  echo "Usage: sbatch run_gpu.sbatch script.py [args]"
-  exit 1
-fi
-
-SCRIPT="$1"
-shift
-
-module purge
-module load ALICE/default
-module load Miniconda3/24.7.1-0
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate gpt
-
-echo "==============================="
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $(hostname)"
-echo "Working Dir: $(pwd)"
-echo "Start Time: $(date)"
-echo "Script: $SCRIPT"
-echo "Args: $@"
-echo "==============================="
-
-echo "GPU info:"
-nvidia-smi || true
-
-echo "Python version:"
-python --version
-
-python "$SCRIPT" "$@" 2>&1 | tee "$LOGDIR/run-${SLURM_JOB_ID}.log"
-
-echo "Finished at $(date)"
-```
-
----
-
-# 8. Check Job Logs
-
-Slurm logs:
-
-```bash
-logs/python-gpu-JOBID.out
-logs/python-gpu-JOBID.err
-```
-
-Python runtime logs:
-
-```bash
-logs/run-JOBID.log
-```
-
-Watch logs live:
-
-```bash
-tail -f logs/run-JOBID.log
-```
-
----
-
-# 9. Check GPU Usage
-
-```bash
-nvidia-smi
-```
-
-Continuous monitoring:
-
-```bash
-watch -n 2 nvidia-smi
-```
-
----
-
-# 10. Useful Debugging
-
-Check environment:
-
-```bash
-which python
-python --version
-```
-
-Check CUDA:
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"
-```
-
----
-
-# 11. Quick Dev Workflow
-
-Typical development loop:
-
-```bash
-ssh alice
-cd project
-
-srun --partition=gpu-a100-80g --gres=gpu:1 --pty bash
-
-conda activate gpt
-python train.py
-```
-
-For long jobs:
-
-```bash
-sbatch run_gpu.sbatch train.py
-```
-
----
-
-# 12. Folder Structure (Recommended)
-
-```
-project/
-│
-├── run_gpu.sbatch
-├── logs/
-├── data/
-└── checkpoints/
-```
-
----
-
-# 13. Helpful Commands
-
-### show partitions
-
-```bash
-sinfo
-```
-
-### see GPU queues
-
-```bash
-squeue -p gpu-a100-80g
-```
-
-### list modules
-
-```bash
-module avail
-```
-
-### search modules
-
-```bash
-module spider python
-```
-
----
-
-# 14. Common Job States
-
-|Code|Meaning|
-|---|---|
-|PD|Pending (waiting in queue)|
-|R|Running|
-|CG|Completing|
-|F|Failed|
-|CD|Completed|
-
----
-
-# 15. Monitor Job Progress
-
-```bash
-squeue -u $USER
-```
-
-Watch job logs:
-
-```bash
-tail -f logs/run-JOBID.log
-```
-
----
-
-# 16. Cancel Jobs
-
-Cancel one job:
-
-```bash
-scancel JOBID
-```
-
-Cancel all your jobs:
-
-```bash
-scancel -u $USER
-```
-
----
-
-# 17. Best Practices
-
-✔ Never run heavy code on **login nodes**  
-✔ Use **srun for debugging**  
-✔ Use **sbatch for training jobs**  
-✔ Always log output  
-✔ Keep experiments reproducible
-
----
-
-# 18. Quick GPU Job Template
-
-```bash
-sbatch run_gpu.sbatch train.py --epochs 10
-```
-
----
-
-# 19. Copy Files Between Local and ALICE
-
-### Local to ALICE
-
-Copy a local checkpoint file to the remote `alice` machine:
-
-```bash
-scp ./checkpoints/qwen3_0.6b.pth alice:~/omega/gpt/checkpoints
-```
-
-### ALICE to Local
-
-Sync file from `alice` to your local `./logs` folder:
-
-```bash
-rsync -avz alice:~/omega/gpt/checkpoints/qwen3_0.6b.pth ./checkpoints
-```
-
-Copy a single checkpoint from `alice` to local:
-
-```bash
-scp alice:~/omega/gpt/checkpoints/qwen3_0.6b.pth ./checkpoints
-```
+- `--freq_evaluation` (default: `100`): evaluate every N training steps.
+- `--iter_evaluation` (default: `50`): number of batches used during each evaluation call.
+- `--save_logs` / `--no-save_logs` (default: `True`): save CSV logs from trainer.
+- `--show_progress_bar` / `--no-show_progress_bar` (default: `True`): toggle tqdm progress display.
+- `--progress_update_freq` (default: `20`): update tqdm postfix every N steps.
+- `--freq_checkpoint` (default: `None`): save checkpoint every N epochs (`None` disables periodic checkpointing).

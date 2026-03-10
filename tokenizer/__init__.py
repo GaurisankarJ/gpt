@@ -1,3 +1,3 @@
-from .tokenizer import Qwen_3_Tokenizer
+from .tokenizer_qwen_3 import Qwen_3_Tokenizer
 
 __all__ = ["Qwen_3_Tokenizer"]
