@@ -7,8 +7,9 @@ import torch
 from evaluation import (
     EvaluatorInstructionFineTuning,
 )
-from fine_tuning import TrainerInstructionFineTuning
+from fine_tuning import LearningRateScheduler, TrainerInstructionFineTuning
 from generate import Generator_Qwen_3
+from parameter_efficient_fine_tuning import replace_linear_with_lora
 from tokenizer import Qwen_3_Tokenizer
 from utils import get_device
 
@@ -52,9 +53,15 @@ HYPERPARAMETER_INSTRUCTION_TUNING = {
     "seed": 42,
     "evaluation_model": "llama3.2:3b",
     "test_data_path": "instruction_tuning_data_with_response_qwen3_0.6b_base_20260309_152002.json",
-    "initial_learning_rate": 5e-8,
-    "learning_rate_warmup": 10,
+    "warmup": True,
     "cosine_decay": True,
+    "initial_learning_rates": [5e-8],
+    "peak_learning_rates": [5e-5],
+    "learning_rate_warmup_percentage": 10,
+    "minimum_learning_rates_percentage": 10,
+    "lora": True,
+    "lora_rank": 16,
+    "lora_alpha": 16,
 }
 
 if __name__ == "__main__":
@@ -94,9 +101,14 @@ if __name__ == "__main__":
     seed = args.seed
     evaluation_model = args.evaluation_model
     test_data_path = args.test_data_path
-    initial_learning_rate = args.initial_learning_rate
-    learning_rate_warmup = args.learning_rate_warmup
+    warmup = args.warmup
     cosine_decay = args.cosine_decay
+    initial_learning_rates = args.initial_learning_rates
+    peak_learning_rates = args.peak_learning_rates
+    learning_rate_warmup_percentage = args.learning_rate_warmup_percentage
+    minimum_learning_rates_percentage = args.minimum_learning_rates_percentage
+    lora = args.lora
+    lora_alpha = args.lora_alpha
 
     # Get device
     device = get_device()
@@ -108,6 +120,22 @@ if __name__ == "__main__":
         checkpoint_path=checkpoint_path,
         device=device,
     )
+
+    if lora:
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Total trainable parameters before: {total_params:,}")
+
+        for param in model.parameters():
+            param.requires_grad = False
+
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Total trainable parameters after: {total_params:,}")
+        replace_linear_with_lora(model, rank=lora_alpha, alpha=lora_alpha)
+
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Total trainable LoRA parameters: {total_params:,}")
+
+        model.to(device)
 
     # Get tokenizer
     tokenizer = Qwen_3_Tokenizer(
@@ -159,6 +187,26 @@ if __name__ == "__main__":
             weight_decay=weight_decay,
         )
 
+        # Create learning rate scheduler
+        learning_rate_scheduler = LearningRateScheduler(
+            num_epochs=num_epochs,
+            len_train_dataloader=len(train_dataloader),
+        )
+
+        if warmup:
+            learning_rate_scheduler.initialize_learning_rates_warmup(
+                warmup_percentage=learning_rate_warmup_percentage,
+                initial_learning_rates=initial_learning_rates,
+                peak_learning_rates=peak_learning_rates,
+            )
+
+        if cosine_decay:
+            learning_rate_scheduler.initialize_learning_rates_cosine_decay(
+                minimum_learning_rates_percentage=minimum_learning_rates_percentage,
+                initial_learning_rates=initial_learning_rates,
+                peak_learning_rates=peak_learning_rates,
+            )
+
         # Create trainer
         trainer = TrainerInstructionFineTuning(
             model=model,
@@ -180,8 +228,8 @@ if __name__ == "__main__":
             progress_update_freq=progress_update_freq,
             grad_clip=grad_clip,
             freq_checkpoint=freq_checkpoint,
-            initial_learning_rate=initial_learning_rate,
-            learning_rate_warmup=learning_rate_warmup,
+            learning_rate_scheduler=learning_rate_scheduler,
+            warmup=warmup,
             cosine_decay=cosine_decay,
         )
 

@@ -212,22 +212,60 @@ def parse_args(HYPERPARAMETER_INSTRUCTION_TUNING: dict) -> argparse.Namespace:
         help="Evaluation model",
     )
     parser.add_argument(
-        "--initial_learning_rate",
+        "--initial_learning_rates",
         type=float,
-        default=HYPERPARAMETER_INSTRUCTION_TUNING["initial_learning_rate"],
-        help="Initial learning rate",
+        nargs="+",
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["initial_learning_rates"],
+        help="Initial learning rates",
     )
     parser.add_argument(
-        "--learning_rate_warmup",
+        "--learning_rate_warmup_percentage",
         type=float,
-        default=HYPERPARAMETER_INSTRUCTION_TUNING["learning_rate_warmup"],
-        help="Learning rate warmup",
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["learning_rate_warmup_percentage"],
+        help="Learning rate warmup percentage",
+    )
+    parser.add_argument(
+        "--peak_learning_rates",
+        type=float,
+        nargs="+",
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["peak_learning_rates"],
+        help="Peak learning rates",
     )
     parser.add_argument(
         "--cosine_decay",
         action=argparse.BooleanOptionalAction,
         default=HYPERPARAMETER_INSTRUCTION_TUNING["cosine_decay"],
         help="Cosine decay",
+    )
+    parser.add_argument(
+        "--minimum_learning_rates_percentage",
+        type=float,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["minimum_learning_rates_percentage"],
+        help="Minimum learning rates percentage",
+    )
+    parser.add_argument(
+        "--warmup",
+        action=argparse.BooleanOptionalAction,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["warmup"],
+        help="Warmup",
+    )
+    parser.add_argument(
+        "--lora",
+        action=argparse.BooleanOptionalAction,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["lora"],
+        help="LoRA",
+    )
+    parser.add_argument(
+        "--lora_alpha",
+        type=int,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["lora_alpha"],
+        help="LoRA alpha",
+    )
+    parser.add_argument(
+        "--lora_rank",
+        type=int,
+        default=HYPERPARAMETER_INSTRUCTION_TUNING["lora_rank"],
+        help="LoRA rank",
     )
 
     return parser.parse_args()

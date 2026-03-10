@@ -5,10 +5,9 @@
 #     format_instruction_tuning_data,
 #     read_json,
 # )
-from matplotlib import pyplot as plt
-from pandas import read_csv
 
-from models import get_qwen3_config
+from models import Qwen_3_Model, get_qwen3_config
+from parameter_efficient_fine_tuning import replace_linear_with_lora
 
 # from tokenizer import Qwen_3_Tokenizer
 
@@ -187,17 +186,31 @@ if __name__ == "__main__":
     # result = query_model(prompt="What do Llamas eat?")
     # print(result)
 
-    df = read_csv("logs/qwen3_0.6b_base_instruct_learning_rate_20260309_213431.csv")
-    x = len(df)
-    plt.ylabel("Learning Rate")
-    plt.xlabel("Global Steps")
-    plt.plot(range(x), df.iloc[:, 0].tolist())
-    df.columns.values[0] = "Learning Rate"
-    # df["Global Steps"] = range(x)
-    print(df.head())
-    df.to_csv(
-        "logs/qwen3_0.6b_base_instruct_learning_rate_20260309_213431.csv", index=False
-    )
+    # df = read_csv("logs/qwen3_0.6b_base_instruct_learning_rate_20260309_213431.csv")
+    # x = len(df)
+    # plt.ylabel("Learning Rate")
+    # plt.xlabel("Global Steps")
+    # plt.plot(range(x), df.iloc[:, 0].tolist())
+    # df.columns.values[0] = "Learning Rate"
+    # # df["Global Steps"] = range(x)
+    # print(df.head())
+    # df.to_csv(
+    #     "logs/qwen3_0.6b_base_instruct_learning_rate_20260309_213431.csv", index=False
+    # )
     # df.rename(columns={"Global Steps": "x", "Learning Rate": "y"}, inplace=True)
     # df.head()
     # plt.show()
+
+    model = Qwen_3_Model(**QWEN3_MODEL_CONFIG_0_6B)
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total trainable parameters before: {total_params:,}")
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total trainable parameters after: {total_params:,}")
+    replace_linear_with_lora(model, rank=16, alpha=16)
+
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total trainable LoRA parameters: {total_params:,}")

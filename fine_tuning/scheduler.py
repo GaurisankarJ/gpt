@@ -1,156 +1,284 @@
 import math
-from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import List, Optional, Tuple
 
-@dataclass(frozen=True)
-class LearningRateSchedulerState:
-    total_steps: int
-    warmup_steps: int
-    cosine_decay: bool
-    min_learning_rate_ratio: float
-    peak_learning_rates: List[float]
-    initial_learning_rates: List[float]
+from .utils import save_csv_logs
 
 
 class LearningRateScheduler:
     def __init__(
         self,
-        peak_learning_rates: List[float],
-        total_steps: int,
-        learning_rate_warmup: Optional[float] = None,
-        initial_learning_rate: Optional[float] = None,
-        initial_learning_rates: Optional[List[float]] = None,
-        cosine_decay: bool = False,
-        min_learning_rate_ratio: float = 0.0,
-    ) -> None:
-        if not peak_learning_rates:
-            raise ValueError("peak_learning_rates must not be empty.")
-        if total_steps <= 0:
-            raise ValueError("total_steps must be > 0.")
-        if learning_rate_warmup is None:
-            learning_rate_warmup = 0.0
-        if learning_rate_warmup < 0 or learning_rate_warmup > 100:
-            raise ValueError("learning_rate_warmup must be between 0 and 100.")
-        if min_learning_rate_ratio < 0 or min_learning_rate_ratio > 1:
-            raise ValueError("min_learning_rate_ratio must be between 0 and 1.")
-        if initial_learning_rate is not None and initial_learning_rate < 0:
-            raise ValueError("initial_learning_rate must be non-negative.")
-        if initial_learning_rates is not None and initial_learning_rate is not None:
+        num_epochs: int,
+        len_train_dataloader: int,
+    ):
+        # Parameters
+        if num_epochs <= 0 or len_train_dataloader <= 0:
             raise ValueError(
-                "Provide either initial_learning_rate or initial_learning_rates, not both."
+                "num_epochs and len_train_dataloader must be greater than 0."
             )
 
-        self.total_steps = total_steps
-        self.cosine_decay = cosine_decay
-        self.min_learning_rate_ratio = min_learning_rate_ratio
-        self.peak_learning_rates = [float(lr) for lr in peak_learning_rates]
+        self.num_epochs = num_epochs
+        self.len_train_dataloader = len_train_dataloader
+        self.learning_rates_warmup = False
+        self.learning_rates_cosine_decay = False
 
-        warmup_steps = int(total_steps * (learning_rate_warmup / 100.0))
-        if learning_rate_warmup > 0:
-            warmup_steps = max(1, warmup_steps)
-        else:
-            warmup_steps = 0
-        self.warmup_steps = warmup_steps
+        # Learning rates
+        self.initial_learning_rates = None
+        self.peak_learning_rates = None
+        self.learning_rate_increment = None
+        self.minimum_learning_rates = None
 
-        self.initial_learning_rates = self._initialize_initial_learning_rates(
-            initial_learning_rate=initial_learning_rate,
-            initial_learning_rates=initial_learning_rates,
-        )
+        # Warmup steps
+        self.warmup_steps = None
 
-        self.state = LearningRateSchedulerState(
-            total_steps=self.total_steps,
-            warmup_steps=self.warmup_steps,
-            cosine_decay=self.cosine_decay,
-            min_learning_rate_ratio=self.min_learning_rate_ratio,
-            peak_learning_rates=self.peak_learning_rates.copy(),
-            initial_learning_rates=self.initial_learning_rates.copy(),
-        )
+        # Track learning rate
+        self.track_learning_rate = []
 
-    def _initialize_initial_learning_rates(
+    def _validate_learning_rate_lists(
         self,
-        initial_learning_rate: Optional[float],
-        initial_learning_rates: Optional[List[float]],
-    ) -> List[float]:
-        if self.warmup_steps == 0:
-            return self.peak_learning_rates.copy()
+        initial_learning_rates: List[float],
+        peak_learning_rates: List[float],
+    ) -> None:
+        if not initial_learning_rates or not peak_learning_rates:
+            raise ValueError("Learning rate lists must not be empty.")
 
-        if initial_learning_rates is not None:
-            if len(initial_learning_rates) != len(self.peak_learning_rates):
-                raise ValueError(
-                    "initial_learning_rates must match peak_learning_rates length."
-                )
-            return [float(lr) for lr in initial_learning_rates]
-
-        if initial_learning_rate is not None:
-            return [
-                float(initial_learning_rate) for _ in range(len(self.peak_learning_rates))
-            ]
-
-        return [lr / 1e4 for lr in self.peak_learning_rates]
-
-    def _calculate_warmup_learning_rates(self, step_idx: int) -> List[float]:
-        if self.warmup_steps <= 0:
-            return self.peak_learning_rates.copy()
-
-        if self.warmup_steps == 1:
-            progress = 1.0
-        else:
-            progress = step_idx / (self.warmup_steps - 1)
-
-        return [
-            init_lr + progress * (peak_lr - init_lr)
-            for init_lr, peak_lr in zip(
-                self.initial_learning_rates, self.peak_learning_rates
+        if len(initial_learning_rates) != len(peak_learning_rates):
+            raise ValueError(
+                "Initial and peak learning rate lists must have the same length."
             )
+
+        if any(lr < 0 for lr in initial_learning_rates):
+            raise ValueError("Initial learning rates must be non-negative.")
+
+        if any(lr < 0 for lr in peak_learning_rates):
+            raise ValueError("Peak learning rates must be non-negative.")
+
+    def reset_scheduler(self) -> None:
+        self.learning_rates_warmup = False
+        self.learning_rates_cosine_decay = False
+        self.initial_learning_rates = None
+        self.peak_learning_rates = None
+        self.learning_rate_increment = None
+        self.minimum_learning_rates = None
+        self.warmup_steps = None
+        self.track_learning_rate = []
+
+    def set_warmup_steps(
+        self,
+        warmup_percentage: float,
+    ) -> int | None:
+        if warmup_percentage < 0 or warmup_percentage > 100:
+            raise ValueError("Warmup percentage must be between 0 and 100.")
+
+        total_steps = self.len_train_dataloader * self.num_epochs
+        self.warmup_steps = int(warmup_percentage * total_steps / 100)
+
+        if self.warmup_steps == 0:
+            self.warmup_steps = None
+
+            return
+
+        self.warmup_steps = max(1, self.warmup_steps)
+
+        return self.warmup_steps
+
+    def set_learning_rates_warmup(
+        self,
+        initial_learning_rates: List[float],
+        peak_learning_rates: List[float],
+    ) -> Tuple[List[float], List[float]]:
+        self._validate_learning_rate_lists(
+            initial_learning_rates=initial_learning_rates,
+            peak_learning_rates=peak_learning_rates,
+        )
+
+        self.initial_learning_rates = initial_learning_rates
+        self.peak_learning_rates = peak_learning_rates
+
+        return self.initial_learning_rates, self.peak_learning_rates
+
+    def initialize_learning_rates_warmup(
+        self,
+        warmup_percentage: float,
+        initial_learning_rates: List[float],
+        peak_learning_rates: List[float],
+    ) -> None:
+        initial_learning_rates, peak_learning_rates = self.set_learning_rates_warmup(
+            initial_learning_rates=initial_learning_rates,
+            peak_learning_rates=peak_learning_rates,
+        )
+
+        warmup_steps = self.set_warmup_steps(warmup_percentage)
+        if warmup_steps is None:
+            self.learning_rates_warmup = False
+            self.learning_rate_increment = None
+
+            return
+        self.learning_rates_warmup = True
+
+        self.learning_rate_increment = [
+            (peak - init) / warmup_steps
+            for init, peak in zip(initial_learning_rates, peak_learning_rates)
         ]
 
-    def _calculate_cosine_decay_learning_rates(self, step_idx: int) -> List[float]:
-        decay_steps = self.total_steps - self.warmup_steps
-        if decay_steps <= 1:
-            progress = 1.0
+    def get_learning_rates_warmup(self, global_steps: int) -> List[float]:
+        if self.learning_rates_warmup is False:
+            raise ValueError("Learning rates warmup is not initialized.")
+        if (
+            self.warmup_steps is None
+            or self.initial_learning_rates is None
+            or self.learning_rate_increment is None
+            or self.peak_learning_rates is None
+        ):
+            raise ValueError("Warmup state is incomplete.")
+
+        if global_steps < self.warmup_steps:
+            return [
+                self.initial_learning_rates[i]
+                + self.learning_rate_increment[i] * global_steps
+                for i in range(len(self.initial_learning_rates))
+            ]
         else:
-            decay_step_idx = step_idx - self.warmup_steps
-            progress = decay_step_idx / (decay_steps - 1)
-            progress = min(max(progress, 0.0), 1.0)
+            return self.peak_learning_rates
 
-        learning_rates = []
-        for peak_lr in self.peak_learning_rates:
-            min_lr = peak_lr * self.min_learning_rate_ratio
-            cosine_multiplier = 0.5 * (1.0 + math.cos(math.pi * progress))
-            learning_rates.append(min_lr + (peak_lr - min_lr) * cosine_multiplier)
-        return learning_rates
+    def set_learning_rates_cosine_decay(
+        self,
+        minimum_learning_rates_percentage: float,
+        initial_learning_rates: Optional[List[float]] = None,
+        peak_learning_rates: Optional[List[float]] = None,
+    ) -> List[float]:
+        if (
+            minimum_learning_rates_percentage < 0
+            or minimum_learning_rates_percentage > 100
+        ):
+            raise ValueError(
+                "Minimum learning rates percentage must be between 0 and 100."
+            )
 
-    def get_learning_rates(self, step_idx: int) -> List[float]:
-        if step_idx < 0:
-            raise ValueError("step_idx must be >= 0.")
+        resolved_initial = (
+            initial_learning_rates
+            if initial_learning_rates is not None
+            else self.initial_learning_rates
+        )
+        resolved_peak = (
+            peak_learning_rates
+            if peak_learning_rates is not None
+            else self.peak_learning_rates
+        )
 
-        clamped_step_idx = min(step_idx, self.total_steps - 1)
+        if resolved_initial is None or resolved_peak is None:
+            raise ValueError(
+                "Initial and peak learning rates must be provided at least once."
+            )
 
-        if self.warmup_steps > 0 and clamped_step_idx < self.warmup_steps:
-            return self._calculate_warmup_learning_rates(clamped_step_idx)
+        self._validate_learning_rate_lists(
+            initial_learning_rates=resolved_initial,
+            peak_learning_rates=resolved_peak,
+        )
 
-        if self.cosine_decay:
-            return self._calculate_cosine_decay_learning_rates(clamped_step_idx)
+        self.initial_learning_rates = resolved_initial
+        self.peak_learning_rates = resolved_peak
 
-        return self.peak_learning_rates.copy()
+        self.minimum_learning_rates = [
+            (minimum_learning_rates_percentage / 100) * lr
+            for lr in self.peak_learning_rates
+        ]
 
+        return self.minimum_learning_rates
 
-def initialize_learning_rate_scheduler(
-    peak_learning_rates: List[float],
-    total_steps: int,
-    learning_rate_warmup: Optional[float] = None,
-    initial_learning_rate: Optional[float] = None,
-    initial_learning_rates: Optional[List[float]] = None,
-    cosine_decay: bool = False,
-    min_learning_rate_ratio: float = 0.0,
-) -> tuple[Callable[[int], List[float]], LearningRateSchedulerState]:
-    scheduler = LearningRateScheduler(
-        peak_learning_rates=peak_learning_rates,
-        total_steps=total_steps,
-        learning_rate_warmup=learning_rate_warmup,
-        initial_learning_rate=initial_learning_rate,
-        initial_learning_rates=initial_learning_rates,
-        cosine_decay=cosine_decay,
-        min_learning_rate_ratio=min_learning_rate_ratio,
-    )
-    return scheduler.get_learning_rates, scheduler.state
+    def initialize_learning_rates_cosine_decay(
+        self,
+        minimum_learning_rates_percentage: float,
+        initial_learning_rates: List[float],
+        peak_learning_rates: List[float],
+    ) -> None:
+        self.learning_rates_cosine_decay = True
+
+        self.set_learning_rates_cosine_decay(
+            minimum_learning_rates_percentage=minimum_learning_rates_percentage,
+            initial_learning_rates=initial_learning_rates,
+            peak_learning_rates=peak_learning_rates,
+        )
+
+    def get_learning_rates_cosine_decay(self, global_steps: int) -> List[float]:
+        if self.learning_rates_cosine_decay is False:
+            raise ValueError("Learning rates cosine decay is not initialized.")
+        if self.minimum_learning_rates is None or self.peak_learning_rates is None:
+            raise ValueError("Cosine decay state is incomplete.")
+
+        total_steps = self.num_epochs * self.len_train_dataloader
+
+        if self.learning_rates_warmup is True:
+            if self.warmup_steps is None:
+                raise ValueError("Warmup is enabled but warmup_steps is not set.")
+
+            decay_steps = total_steps - self.warmup_steps
+            if decay_steps <= 0:
+                return self.minimum_learning_rates
+
+            progress = (global_steps - self.warmup_steps) / (decay_steps)
+        else:
+            progress = global_steps / total_steps
+
+        progress = min(max(progress, 0.0), 1.0)
+
+        return [
+            self.minimum_learning_rates[i]
+            + 0.5
+            * (self.peak_learning_rates[i] - self.minimum_learning_rates[i])
+            * (1 + math.cos(math.pi * progress))
+            for i in range(len(self.minimum_learning_rates))
+        ]
+
+    def get_scheduled_learning_rates(
+        self,
+        warmup: bool,
+        cosine_decay: bool,
+        global_steps: int,
+    ) -> List[float]:
+        if warmup and not cosine_decay:
+            learning_rates = self.get_learning_rates_warmup(global_steps)
+            self.track_learning_rate.append(learning_rates)
+
+            return learning_rates
+        elif not warmup and cosine_decay:
+            learning_rates = self.get_learning_rates_cosine_decay(global_steps)
+            self.track_learning_rate.append(learning_rates)
+
+            return learning_rates
+        elif warmup and cosine_decay:
+            if (
+                self.learning_rates_warmup
+                and self.warmup_steps is not None
+                and global_steps < self.warmup_steps
+            ):
+                learning_rates = self.get_learning_rates_warmup(global_steps)
+            else:
+                learning_rates = self.get_learning_rates_cosine_decay(global_steps)
+            self.track_learning_rate.append(learning_rates)
+
+            return learning_rates
+        elif not warmup and not cosine_decay:
+            if self.peak_learning_rates is None:
+                raise ValueError("Peak learning rates are not initialized.")
+            learning_rates = self.peak_learning_rates
+            self.track_learning_rate.append(learning_rates)
+
+            return learning_rates
+        else:
+            raise ValueError("Invalid learning rate schedule.")
+
+    def save_csv_logs_learning_rate(
+        self,
+        model_name: str,
+    ) -> None:
+        data = {
+            "Global Steps": range(len(self.track_learning_rate)),
+            "Learning Rate": self.track_learning_rate,
+        }
+
+        full_path = save_csv_logs(
+            data=data,
+            name=f"{model_name}_instruct_learning_rate",
+        )
+
+        print(f"Learning rates for instruction fine-tuning saved to: {full_path}.")

@@ -57,16 +57,20 @@ python -m scripts.fine_tune_instruction \
 
 ## Testing
 
-Run the targeted script test suite:
+Run the full validated fine-tuning + script test suites (single command):
 
 ```bash
-python -m pytest -q tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
+python -m pytest -q tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
+
+python -m pytest -vv -rP tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py
 ```
 
-Run all tests:
+Run every test in the repository:
 
 ```bash
 python -m pytest -q
+
+python -m pytest -vv -rP
 ```
 
 ## CLI Arguments (`scripts/fine_tune_instruction.py`)
@@ -77,14 +81,15 @@ Note: boolean flags use `BooleanOptionalAction`, so you can pass either `--flag`
 
 - `--train` (default: `False`): enable training path.
 - `--test` (default: `False`): enable evaluation + response generation path.
+- `--eval` (default: `False`): run model-judge evaluation on response JSON.
+- `--test_data_path` (default: from hyperparameters): optional JSON path used by `--eval`.
 
 ### Model and tokenizer
 
 - `--model_name` (default: `qwen3_0.6b_base`): run/model label used in output names.
 - `--model_size` (default: `0.6B`): model config key for `get_qwen3_config`.
-- `--model_type` (default: `base`): model type passed into generator.
+- `--model_type` (default: `instruct`): model type passed into generator.
 - `--tokenizer_file_path` (default: `./tokenizer/qwen_3_instruct_tokenizer.json`): tokenizer JSON path.
-- `--repo_id` (default: `Qwen/Qwen3-0.6B-Base`): tokenizer/model repo id.
 - `--checkpoint_path` (default: `qwen3_0.6b_base`): checkpoint basename loaded from `./checkpoints/<name>.pth`.
 
 ### Prompt formatting
@@ -120,7 +125,30 @@ Note: boolean flags use `BooleanOptionalAction`, so you can pass either `--flag`
 
 - `--freq_evaluation` (default: `100`): evaluate every N training steps.
 - `--iter_evaluation` (default: `50`): number of batches used during each evaluation call.
+- `--evaluation_model` (default: `llama3.2:3b`): model used in `--eval` scoring.
 - `--save_logs` / `--no-save_logs` (default: `True`): save CSV logs from trainer.
 - `--show_progress_bar` / `--no-show_progress_bar` (default: `True`): toggle tqdm progress display.
 - `--progress_update_freq` (default: `20`): update tqdm postfix every N steps.
 - `--freq_checkpoint` (default: `None`): save checkpoint every N epochs (`None` disables periodic checkpointing).
+
+### Scheduler and LoRA
+
+- `--warmup` / `--no-warmup` (default: `True`): enable/disable warmup schedule.
+- `--cosine_decay` / `--no-cosine_decay` (default: `True`): enable/disable cosine decay.
+- `--initial_learning_rates` (default: `[5e-8]`): initial LR(s), one per optimizer param group.
+- `--peak_learning_rates` (default: `[5e-5]`): peak LR(s), one per optimizer param group.
+- `--learning_rate_warmup_percentage` (default: `10`): warmup duration as percentage of total steps.
+- `--minimum_learning_rates_percentage` (default: `10`): min LR as percentage of peak LR.
+- `--lora` / `--no-lora` (default: `True`): enable/disable LoRA replacement.
+- `--lora_alpha` (default: `16`): LoRA alpha.
+- `--lora_rank` (default: `16`): LoRA rank.
+
+## Newly Added Args
+
+- `--eval`
+- `--test_data_path`
+- `--evaluation_model`
+- `--warmup`, `--cosine_decay`
+- `--initial_learning_rates`, `--peak_learning_rates`
+- `--learning_rate_warmup_percentage`, `--minimum_learning_rates_percentage`
+- `--lora`, `--lora_alpha`, `--lora_rank`
