@@ -21,6 +21,7 @@ from evaluation import (
 )
 from generate import Generator_Qwen_3
 from models import Qwen_3_Model, get_qwen3_config
+from parameter_efficient_fine_tuning import replace_linear_with_lora
 from tokenizer import Qwen_3_Tokenizer
 from utils import print_model_memory_size
 
@@ -275,6 +276,10 @@ def load_model(
     model_size: str,
     checkpoint_path: str,
     device: torch.device,
+    mode: bool = False,
+    lora: bool = False,
+    lora_rank: int = 16,
+    lora_alpha: int = 16,
 ) -> Tuple[Qwen_3_Model, dict]:
     # Get model configuration
     model_config = get_qwen3_config(model_size)
@@ -282,6 +287,9 @@ def load_model(
     # Create Qwen 3 model
     model = Qwen_3_Model(**model_config)
     model.to(device)
+
+    if mode and lora:
+        replace_linear_with_lora(model, rank=lora_rank, alpha=lora_alpha)
 
     # Print model memory size
     print_model_memory_size(model)

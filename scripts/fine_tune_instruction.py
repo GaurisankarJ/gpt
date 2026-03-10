@@ -120,6 +120,10 @@ if __name__ == "__main__":
         model_size=model_size,
         checkpoint_path=checkpoint_path,
         device=device,
+        mode=args.test or args.eval,
+        lora=lora,
+        lora_rank=lora_rank,
+        lora_alpha=lora_alpha,
     )
 
     if lora:
