@@ -134,10 +134,8 @@ def test_validate_training_configuration_rejects_numeric_invalid_inputs(
         "learning_rate_scheduler": None,
         "warmup": False,
         "cosine_decay": False,
-        "learning_rate_warmup_percentage": None,
         "initial_learning_rates": None,
         "peak_learning_rates": None,
-        "minimum_learning_rates_percentage": None,
     }
     base.update(kwargs)
 
@@ -155,14 +153,12 @@ def test_validate_training_configuration_requires_scheduler_when_enabled(trainer
             learning_rate_scheduler=None,
             warmup=True,
             cosine_decay=False,
-            learning_rate_warmup_percentage=10,
             initial_learning_rates=[0.0],
             peak_learning_rates=[0.01],
-            minimum_learning_rates_percentage=None,
         )
 
 
-def test_validate_training_configuration_requires_scheduler_lrs_and_percentages(trainer):
+def test_validate_training_configuration_requires_scheduler_lrs(trainer):
     scheduler = LearningRateScheduler(num_epochs=1, len_train_dataloader=2)
 
     with pytest.raises(ValueError, match="required when warmup or cosine_decay"):
@@ -174,10 +170,8 @@ def test_validate_training_configuration_requires_scheduler_lrs_and_percentages(
             learning_rate_scheduler=scheduler,
             warmup=True,
             cosine_decay=False,
-            learning_rate_warmup_percentage=10,
             initial_learning_rates=None,
             peak_learning_rates=[0.01],
-            minimum_learning_rates_percentage=None,
         )
 
     with pytest.raises(ValueError, match="initial_learning_rates length must match"):
@@ -189,40 +183,8 @@ def test_validate_training_configuration_requires_scheduler_lrs_and_percentages(
             learning_rate_scheduler=scheduler,
             warmup=True,
             cosine_decay=False,
-            learning_rate_warmup_percentage=10,
             initial_learning_rates=[0.0, 0.0],
             peak_learning_rates=[0.01],
-            minimum_learning_rates_percentage=None,
-        )
-
-    with pytest.raises(ValueError, match="learning_rate_warmup_percentage is required"):
-        trainer.validate_training_configuration(
-            num_epochs=1,
-            freq_evaluation=1,
-            progress_update_freq=1,
-            freq_checkpoint=None,
-            learning_rate_scheduler=scheduler,
-            warmup=True,
-            cosine_decay=False,
-            learning_rate_warmup_percentage=None,
-            initial_learning_rates=[0.0],
-            peak_learning_rates=[0.01],
-            minimum_learning_rates_percentage=None,
-        )
-
-    with pytest.raises(ValueError, match="minimum_learning_rates_percentage is required"):
-        trainer.validate_training_configuration(
-            num_epochs=1,
-            freq_evaluation=1,
-            progress_update_freq=1,
-            freq_checkpoint=None,
-            learning_rate_scheduler=scheduler,
-            warmup=False,
-            cosine_decay=True,
-            learning_rate_warmup_percentage=None,
-            initial_learning_rates=[0.0],
-            peak_learning_rates=[0.01],
-            minimum_learning_rates_percentage=None,
         )
 
 
@@ -235,10 +197,8 @@ def test_validate_training_configuration_accepts_valid_cases(trainer):
         learning_rate_scheduler=None,
         warmup=False,
         cosine_decay=False,
-        learning_rate_warmup_percentage=None,
         initial_learning_rates=None,
         peak_learning_rates=None,
-        minimum_learning_rates_percentage=None,
     )
 
 
@@ -497,7 +457,7 @@ def test_train_without_scheduler_raises_attribute_error(trainer):
     train_loader = make_dataloader(batch_size=2)
     val_loader = make_dataloader(batch_size=2)
 
-    with pytest.raises(AttributeError, match="learning_rate_warmup_percentage"):
+    with pytest.raises(AttributeError, match="initial_learning_rates"):
         trainer.train(
             train_dataloader=train_loader,
             val_dataloader=val_loader,

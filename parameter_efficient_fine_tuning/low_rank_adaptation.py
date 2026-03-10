@@ -11,18 +11,21 @@ class LoRALayer(nn.Module):
         out_dim: int,
         rank: int,
         alpha: float,
+        dtype: torch.dtype,
+        device: torch.device,
     ):
         super().__init__()
-        self.A = nn.Parameter(torch.empty(in_dim, rank))
+        self.A = nn.Parameter(torch.empty(in_dim, rank, dtype=dtype, device=device))
         nn.init.kaiming_uniform_(
             self.A, a=math.sqrt(5)
         )  # similar to standard weight initialization
-        self.B = nn.Parameter(torch.zeros(rank, out_dim))
+        self.B = nn.Parameter(torch.zeros(rank, out_dim, dtype=dtype, device=device))
         self.alpha = alpha
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.alpha * (x @ self.A @ self.B)
-        return x
+        if x.dtype != self.A.dtype:
+            x = x.to(self.A.dtype)
+        return self.alpha * (x @ self.A @ self.B)
 
 
 class LinearWithLoRA(nn.Module):
@@ -39,6 +42,8 @@ class LinearWithLoRA(nn.Module):
             linear.out_features,
             rank,
             alpha,
+            linear.weight.dtype,
+            linear.weight.device,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

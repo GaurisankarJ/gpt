@@ -31,8 +31,8 @@ HYPERPARAMETER_INSTRUCTION_TUNING = {
     "dataset_file_path": "instruction_tuning_data.json",
     "checkpoint_path": "qwen3_0.6b_base",
     "batch_size": 8,
-    "learning_rate": 5e-5,
-    "weight_decay": 0.2,
+    "learning_rate": 1e-4,
+    "weight_decay": 0.1,
     "num_epochs": 1,
     "freq_evaluation": 25,
     "iter_evaluation": 50,
@@ -56,9 +56,9 @@ HYPERPARAMETER_INSTRUCTION_TUNING = {
     "warmup": True,
     "cosine_decay": True,
     "initial_learning_rates": [5e-8],
-    "peak_learning_rates": [5e-5],
-    "learning_rate_warmup_percentage": 10,
-    "minimum_learning_rates_percentage": 10,
+    "peak_learning_rates": [1e-4],
+    "learning_rate_warmup_percentage": 5,
+    "minimum_learning_rates_percentage": 30,
     "lora": True,
     "lora_rank": 16,
     "lora_alpha": 16,
@@ -108,6 +108,7 @@ if __name__ == "__main__":
     learning_rate_warmup_percentage = args.learning_rate_warmup_percentage
     minimum_learning_rates_percentage = args.minimum_learning_rates_percentage
     lora = args.lora
+    lora_rank = args.lora_rank
     lora_alpha = args.lora_alpha
 
     # Get device
@@ -130,7 +131,7 @@ if __name__ == "__main__":
 
         total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"Total trainable parameters after: {total_params:,}")
-        replace_linear_with_lora(model, rank=lora_alpha, alpha=lora_alpha)
+        replace_linear_with_lora(model, rank=lora_rank, alpha=lora_alpha)
 
         total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"Total trainable LoRA parameters: {total_params:,}")

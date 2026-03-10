@@ -53,10 +53,8 @@ class TrainerInstructionFineTuning:
         learning_rate_scheduler: Optional[LearningRateScheduler],
         warmup: bool,
         cosine_decay: bool,
-        learning_rate_warmup_percentage: Optional[float],
         initial_learning_rates: Optional[List[float]],
         peak_learning_rates: Optional[List[float]],
-        minimum_learning_rates_percentage: Optional[float],
     ) -> None:
         if num_epochs <= 0:
             raise ValueError("num_epochs must be greater than 0.")
@@ -88,14 +86,6 @@ class TrainerInstructionFineTuning:
                 raise ValueError(
                     "peak_learning_rates length must match optimizer param groups."
                 )
-        if warmup and learning_rate_warmup_percentage is None:
-            raise ValueError(
-                "learning_rate_warmup_percentage is required when warmup is enabled."
-            )
-        if cosine_decay and minimum_learning_rates_percentage is None:
-            raise ValueError(
-                "minimum_learning_rates_percentage is required when cosine_decay is enabled."
-            )
 
     def update_learning_rate(
         self,
@@ -276,10 +266,8 @@ class TrainerInstructionFineTuning:
             learning_rate_scheduler=learning_rate_scheduler,
             warmup=warmup,
             cosine_decay=cosine_decay,
-            learning_rate_warmup_percentage=learning_rate_scheduler.learning_rate_warmup_percentage,
             initial_learning_rates=learning_rate_scheduler.initial_learning_rates,
             peak_learning_rates=learning_rate_scheduler.peak_learning_rates,
-            minimum_learning_rates_percentage=learning_rate_scheduler.minimum_learning_rates_percentage,
         )
 
         for epoch in range(num_epochs):
