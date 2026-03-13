@@ -13,12 +13,36 @@ This project includes a script-based pipeline for instruction fine-tuning and ev
 python -m pip install -r requirements.txt
 ```
 
-### wandb Setup (optional)
+### W&B Setup (optional)
 
 ```bash
 python -m pip install wandb
 wandb login
 python -m scripts.fine_tune_instruction --train --wandb --wandb_project sft
+```
+
+### Run W&B Locally
+
+```bash
+# 1) Start Docker Desktop/daemon first.
+
+# 2) If container already exists, start it:
+docker start wandb-local
+
+# 3) If you need a fresh container, recreate it:
+docker rm -f wandb-local
+docker run --platform linux/amd64 -d -v wandb:/vol -p 8080:8080 --name wandb-local wandb/local
+
+# 4) Verify it is running:
+docker ps -a | grep wandb-local
+docker logs -f wandb-local
+
+# 5) Point wandb CLI/SDK to local server and login:
+export WANDB_BASE_URL=http://localhost:8080
+wandb login --host http://localhost:8080
+
+# 6) Run training against local server:
+python -m scripts.fine_tune_instruction --train --wandb --wandb_entity omega --wandb_project sft
 ```
 
 ## Run the Script

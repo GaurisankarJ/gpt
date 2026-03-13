@@ -68,7 +68,8 @@ HYPERPARAMETER_INSTRUCTION_TUNING = {
     "wandb": True,
     "wandb_project": "sft",
     "wandb_run_name": "test",
-    "wandb_entity": "gaurisankarj1996-leiden-university",
+    # "wandb_entity": "gaurisankarj1996-leiden-university",
+    "wandb_entity": "omega",
     "wandb_tags": ["sft", "lora"],
     "wandb_artifacts": False,
 }
