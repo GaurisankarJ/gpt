@@ -94,7 +94,7 @@ Run the full validated fine-tuning + script test suites (single command):
 ```bash
 python -m pytest -q tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py tests/scripts/test_wandb.py
 
-python -m pytest -vv -rP tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py tests/scripts/test_wandb.py
+python -m pytest -vv -rP tests/fine_tuning/test_scheduler.py tests/fine_tuning/test_instruction_trainer.py tests/scripts/test_fine_tune_instruction_utils.py tests/scripts/test_fine_tune_instruction_main.py tests/scripts/test_wandb.py tests/generate/test_generate_qwen_3.py
 ```
 
 Run every test in the repository:

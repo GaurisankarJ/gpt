@@ -2,8 +2,9 @@ import json
 import os
 import zipfile
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
+import datasets
 import pandas as pd
 import requests
 
@@ -116,6 +117,19 @@ def unzip_and_rename_sms_spam_data():
     zip_name = "sms_spam_collection.zip"
     unzip_file(zip_name)
     rename_tsv("SMSSpamCollection", "sms_spam")
+
+
+def download_and_save_dataset(dataset_name: str, *args: Any) -> datasets.Dataset:
+    dataset = datasets.load_dataset(dataset_name, *args)
+
+    project_root = Path(__file__).resolve().parents[1]
+    data_root = project_root / DATA_PATH
+    data_root.mkdir(parents=True, exist_ok=True)
+
+    dataset.save_to_disk(str(data_root / f"{dataset_name}.json"))
+    print(f"Saved {dataset_name} to {data_root / f'{dataset_name}.json'}")
+
+    return dataset
 
 
 # Qwen3 format

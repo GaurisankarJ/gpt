@@ -15,7 +15,6 @@ class Generator_Qwen_3:
         context_length: int = 40_960,
         tokenizer_file_path: str = "./tokenizer/qwen_3_instruct_tokenizer.json",
         model_type: Literal["thinking", "instruct", "base"] = "instruct",
-        model_size: Literal["0.6B", "1.7B", "4B", "8B", "14B", "32B"] = "0.6B",
         apply_chat_template: Optional[bool] = None,
         add_generation_prompt: Optional[bool] = None,
         add_thinking: Optional[bool] = None,
@@ -25,43 +24,30 @@ class Generator_Qwen_3:
         self.eps = 1e-5
         self.device = next(model.parameters()).device
 
-        if (
-            apply_chat_template is None
-            and add_generation_prompt is None
-            and add_thinking is None
-        ):
-            if model_type == "thinking":
-                tokenizer = Qwen_3_Tokenizer(
-                    tokenizer_file_path=tokenizer_file_path,
-                    model_type=model_type,
-                    apply_chat_template=True,
-                    add_generation_prompt=True,
-                    add_thinking=True,
-                )
-            elif model_type == "instruct":
-                tokenizer = Qwen_3_Tokenizer(
-                    tokenizer_file_path=tokenizer_file_path,
-                    model_type=model_type,
-                    apply_chat_template=True,
-                    add_generation_prompt=True,
-                    add_thinking=False,
-                )
-            elif model_type == "base":
-                tokenizer = Qwen_3_Tokenizer(
-                    tokenizer_file_path=tokenizer_file_path,
-                    model_type=model_type,
-                    apply_chat_template=False,
-                    add_generation_prompt=False,
-                    add_thinking=False,
-                )
+        if model_type == "thinking":
+            default_apply = True
+            default_gen = True
+            default_thinking = True
+        elif model_type == "instruct":
+            default_apply = True
+            default_gen = True
+            default_thinking = False
         else:
-            tokenizer = Qwen_3_Tokenizer(
-                tokenizer_file_path=tokenizer_file_path,
-                model_type=model_type,
-                apply_chat_template=apply_chat_template,
-                add_generation_prompt=add_generation_prompt,
-                add_thinking=add_thinking,
-            )
+            default_apply = False
+            default_gen = False
+            default_thinking = False
+
+        tokenizer = Qwen_3_Tokenizer(
+            tokenizer_file_path=tokenizer_file_path,
+            model_type=model_type,
+            apply_chat_template=default_apply
+            if apply_chat_template is None
+            else apply_chat_template,
+            add_generation_prompt=default_gen
+            if add_generation_prompt is None
+            else add_generation_prompt,
+            add_thinking=default_thinking if add_thinking is None else add_thinking,
+        )
 
         self.tokenizer = tokenizer
         self.cache = KVCache(num_layers=num_layers)
@@ -89,7 +75,7 @@ class Generator_Qwen_3:
         logits: torch.Tensor,
         top_k: int = 10,
     ) -> torch.Tensor:
-        if top_k < 1 or type(top_k) is not int:
+        if not isinstance(top_k, int) or top_k < 1:
             return logits
         k = min(top_k, logits.size(-1))
 
@@ -102,6 +88,32 @@ class Generator_Qwen_3:
 
         return logits
 
+    def get_top_p(
+        self,
+        probs: torch.Tensor,
+        top_p: float = 0.9,
+    ) -> torch.Tensor:
+        if not isinstance(top_p, (float, int)) or not (0 < top_p <= 1):
+            return probs
+
+        probs_sorted, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+        probs_sorted_cumsum = torch.cumsum(probs_sorted, dim=-1)
+        keep_mask = probs_sorted_cumsum - probs_sorted < top_p
+        keep_mask[..., 0] = True
+
+        kept_sorted_probs = torch.where(
+            keep_mask, probs_sorted, torch.zeros_like(probs_sorted)
+        )
+        filtered_probs = torch.zeros_like(probs).scatter(
+            dim=-1, index=sorted_indices, src=kept_sorted_probs
+        )
+
+        denominator = torch.sum(filtered_probs, dim=-1, keepdim=True).clamp_min(1e-12)
+
+        updated_probs = filtered_probs / denominator
+
+        return updated_probs
+
     def get_probs_temperature(
         self,
         logits: torch.Tensor,
@@ -113,6 +125,38 @@ class Generator_Qwen_3:
 
         return probs
 
+    def get_idx_next(
+        self,
+        logits: torch.Tensor,
+        temperature: Optional[float] = None,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+    ) -> torch.Tensor:
+        probs = None
+
+        if top_k is not None:
+            logits = self.get_top_k(
+                logits=logits,
+                top_k=top_k,
+            )
+        if temperature and temperature > 0:
+            probs = self.get_probs_temperature(
+                logits=logits,
+                temperature=temperature,
+            )
+        if top_p is not None:
+            probs = self.get_top_p(
+                probs=probs if probs is not None else torch.softmax(logits, dim=-1),
+                top_p=top_p,
+            )
+
+        if probs is not None:
+            idx_next = torch.multinomial(probs, num_samples=1)
+        else:
+            idx_next = torch.argmax(logits, dim=-1, keepdims=True)
+
+        return idx_next
+
     @torch.no_grad()
     def generate(
         self,
@@ -120,6 +164,7 @@ class Generator_Qwen_3:
         max_token_length: int = 100,
         temperature: Optional[float] = None,
         top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
         cache_enabled: bool = True,
     ) -> torch.Tensor:
         idx = idx.to(self.device)
@@ -134,26 +179,19 @@ class Generator_Qwen_3:
             for _ in range(max_token_length):
                 logits = logits[:, -1, :]
 
-                if top_k is not None:
-                    logits = self.get_top_k(
-                        logits=logits,
-                        top_k=top_k,
-                    )
-                if temperature and temperature > 0:
-                    probs = self.get_probs_temperature(
-                        logits=logits,
-                        temperature=temperature,
-                    )
-                    idx_next = torch.multinomial(probs, num_samples=1)
-                else:
-                    idx_next = torch.argmax(logits, dim=-1, keepdims=True)
-
-                idx = torch.cat((idx, idx_next), dim=-1)
+                idx_next = self.get_idx_next(
+                    logits=logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                )
 
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id
                 ):
                     break
+
+                idx = torch.cat((idx, idx_next), dim=-1)
 
                 logits = self.model(idx_next, cache=self.cache)
 
@@ -167,26 +205,19 @@ class Generator_Qwen_3:
 
                 logits = logits[:, -1, :]
 
-                if top_k is not None:
-                    logits = self.get_top_k(
-                        logits=logits,
-                        top_k=top_k,
-                    )
-                if temperature and temperature > 0:
-                    probs = self.get_probs_temperature(
-                        logits=logits,
-                        temperature=temperature,
-                    )
-                    idx_next = torch.multinomial(probs, num_samples=1)
-                else:
-                    idx_next = torch.argmax(logits, dim=-1, keepdims=True)
-
-                idx = torch.cat((idx, idx_next), dim=-1)
+                idx_next = self.get_idx_next(
+                    logits=logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                )
 
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id
                 ):
                     break
+
+                idx = torch.cat((idx, idx_next), dim=-1)
 
             return idx
 
@@ -196,6 +227,7 @@ class Generator_Qwen_3:
         idx: torch.Tensor,
         max_token_length: int = 100,
         temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
         top_k: Optional[int] = None,
         cache_enabled: bool = True,
     ) -> Iterator[torch.Tensor]:
@@ -211,19 +243,12 @@ class Generator_Qwen_3:
             for _ in range(max_token_length):
                 logits = logits[:, -1, :]
 
-                if top_k is not None:
-                    logits = self.get_top_k(
-                        logits=logits,
-                        top_k=top_k,
-                    )
-                if temperature and temperature > 0:
-                    probs = self.get_probs_temperature(
-                        logits=logits,
-                        temperature=temperature,
-                    )
-                    idx_next = torch.multinomial(probs, num_samples=1)
-                else:
-                    idx_next = torch.argmax(logits, dim=-1, keepdims=True)
+                idx_next = self.get_idx_next(
+                    logits=logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                )
 
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id
@@ -240,24 +265,16 @@ class Generator_Qwen_3:
             for _ in range(max_token_length):
                 idx_cond = idx[:, -self.context_length :]
 
-                with torch.no_grad():
-                    logits = self.model(idx_cond)
+                logits = self.model(idx_cond)
 
                 logits = logits[:, -1, :]
 
-                if top_k is not None:
-                    logits = self.get_top_k(
-                        logits=logits,
-                        top_k=top_k,
-                    )
-                if temperature and temperature > 0:
-                    probs = self.get_probs_temperature(
-                        logits=logits,
-                        temperature=temperature,
-                    )
-                    idx_next = torch.multinomial(probs, num_samples=1)
-                else:
-                    idx_next = torch.argmax(logits, dim=-1, keepdims=True)
+                idx_next = self.get_idx_next(
+                    logits=logits,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                )
 
                 if self.tokenizer.eos_token_id is not None and torch.all(
                     idx_next == self.tokenizer.eos_token_id

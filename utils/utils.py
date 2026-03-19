@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Optional, Set
 
 import tiktoken
@@ -55,7 +56,10 @@ def count_gpt2_parameters(model: torch.nn.Module) -> str:
     return f"{total_params - out_head:,} Parameters"
 
 
-def calculate_model_memory_size(model, input_dtype=torch.float32):
+def calculate_model_memory_size(
+    model: torch.nn.Module,
+    input_dtype: torch.dtype = torch.float32,
+) -> float:
     total_params = 0
     total_grads = 0
     total_buffers = 0
@@ -82,13 +86,44 @@ def calculate_model_memory_size(model, input_dtype=torch.float32):
     return total_memory_gb
 
 
-def print_model_memory_size(model):
+def print_model_memory_size(model: torch.nn.Module) -> None:
     model_memory_size_float32 = calculate_model_memory_size(
-        model, input_dtype=torch.float32
+        model=model,
+        input_dtype=torch.float32,
     )
     model_memory_size_bfloat16 = calculate_model_memory_size(
-        model, input_dtype=torch.bfloat16
+        model=model,
+        input_dtype=torch.bfloat16,
     )
 
     print(f"float32 (PyTorch default): {model_memory_size_float32:.2f} GB")
     print(f"bfloat16: {model_memory_size_bfloat16:.2f} GB")
+
+
+def print_generate_stats(
+    output_token_ids: torch.Tensor,
+    start_time: float,
+    end_time: float,
+) -> None:
+    total_time = end_time - start_time
+
+    print(f"\n\nTime: {total_time:.2f} sec")
+    print(f"{int(output_token_ids.numel() / total_time)} tokens/sec")
+
+    for name, backend in (
+        ("CUDA", getattr(torch, "cuda", None)),
+        ("XPU", getattr(torch, "xpu", None)),
+    ):
+        if backend is not None and backend.is_available():
+            device_type = output_token_ids.device.type
+            if device_type != name.lower():
+                warnings.warn(
+                    f"{name} is available but tensors are on "
+                    f"{device_type}. Memory stats may be 0."
+                )
+            if hasattr(backend, "synchronize"):
+                backend.synchronize()
+            max_mem_bytes = backend.max_memory_allocated()
+            max_mem_gb = max_mem_bytes / (1024**3)
+            print(f"Max {name} memory allocated: {max_mem_gb:.2f} GB")
+            backend.reset_peak_memory_stats()
